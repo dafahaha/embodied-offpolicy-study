@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 .venv/
+.pytest_cache/
+.env
+*.db
 # keep progress.csv and figures, ignore process stdout/stderr dumps
 logs/**/*.out.txt
 logs/**/*.err.txt

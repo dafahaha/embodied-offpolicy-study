@@ -67,8 +67,17 @@ the other two sat at ~600, and the two confidence intervals overlap heavily. Wit
 n=3 and 60k steps this is a **directional signal, not a confirmed effect**. I am
 not claiming a win.
 
-See `figures/learning_curve.png` and `figures/asymptotic.png`. The summary table
-is reproduced by running `python plot.py` on the committed CSVs.
+![SAC learning curves on Hopper-v4 (mean +/- 95% CI across seeds)](figures/learning_curve.png)
+
+![Asymptotic eval return with 95% CI](figures/asymptotic.png)
+
+The summary table is reproduced by running `python plot.py` on the committed CSVs.
+
+## References
+
+- Haarnoja, Z., Zhou, A., Abbeel, P., & Levine, S. (2018). *Soft Actor-Critic:
+  Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor.*
+  arXiv:1801.01290.
 
 ## CI
 

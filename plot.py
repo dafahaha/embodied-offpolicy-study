@@ -29,6 +29,8 @@ def arm_of(run_dir: str) -> str:
         return "Baseline (reward_scale=1.0)"
     if name.startswith("hopper_rewardscale"):
         return "RewardScaled (reward_scale=0.1)"
+    if name.startswith("hopper_fixedalpha"):
+        return "FixedAlpha (auto_tune=off)"
     return None
 
 
@@ -64,7 +66,11 @@ def main():
     plt.figure(figsize=(7, 4.5))
     summary = {}
     colors = {"Baseline (reward_scale=1.0)": "#1f77b4",
-              "RewardScaled (reward_scale=0.1)": "#d62728"}
+              "RewardScaled (reward_scale=0.1)": "#d62728",
+              "FixedAlpha (auto_tune=off)": "#2ca02c"}
+    short = {"Baseline (reward_scale=1.0)": "Baseline",
+             "RewardScaled (reward_scale=0.1)": "RewardScaled",
+             "FixedAlpha (auto_tune=off)": "FixedAlpha"}
 
     for arm, rs in sorted(runs.items()):
         interp = []
@@ -88,7 +94,7 @@ def main():
 
     plt.xlabel("environment steps")
     plt.ylabel("deterministic eval return (5 episodes)")
-    plt.title("SAC on Hopper-v4: reward scaling (CPU, 60k steps/run)")
+    plt.title(f"SAC on Hopper-v4: reward scaling (CPU, {all_max//1000}k steps/run)")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -96,16 +102,17 @@ def main():
     plt.savefig(out1, dpi=130)
     print("wrote", out1)
 
-    # Asymptotic bar chart
-    plt.figure(figsize=(5, 4))
+    # Asymptotic bar chart: yerr is the TRUE 95% CI (1.96 * SEM), matching the
+    # printed summary and the learning-curve shading.
+    plt.figure(figsize=(6, 4.5))
     arms = list(summary.keys())
     means = [summary[a][0] for a in arms]
-    cis = [summary[a][1] for a in arms]
+    cis = [1.96 * summary[a][1] for a in arms]
     plt.bar(range(len(arms)), means, yerr=cis,
             color=[colors.get(a, "#333") for a in arms], capsize=8, alpha=0.8)
-    plt.xticks(range(len(arms)), ["Baseline", "RewardScaled"], rotation=0)
+    plt.xticks(range(len(arms)), [short.get(a, a) for a in arms], rotation=0)
     plt.ylabel("asymptotic eval return (last 20%)")
-    plt.title("Mean +/- 95% CI across seeds")
+    plt.title("Mean +/- 95% CI (1.96 x SEM) across seeds")
     plt.grid(alpha=0.3, axis="y")
     plt.tight_layout()
     out2 = os.path.join(FIG_DIR, "asymptotic.png")
