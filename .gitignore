@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+# keep progress.csv and figures, ignore process stdout/stderr dumps
+logs/**/*.out.txt
+logs/**/*.err.txt
+.DS_Store
