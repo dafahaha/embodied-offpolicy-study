@@ -8,3 +8,5 @@ __pycache__/
 logs/**/*.out.txt
 logs/**/*.err.txt
 .DS_Store
+# analysis scratch / intermediate recalc scripts, not part of the deliverable
+artifacts/
