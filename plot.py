@@ -5,23 +5,26 @@ Usage:
 
 Reads every logs/hopper_*_s*/progress.csv, groups by arm, and writes
 figures/learning_curve.png + figures/asymptotic.png plus a printed summary table
-and Welch / ANOVA statistics. Everything plotted comes straight from the CSVs.
+and exact Welch / ANOVA statistics (scipy). Everything plotted comes straight
+from the CSVs.
 """
 from __future__ import annotations
 
 import glob
-import math
 import os
 import re
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 LOG_ROOT = os.path.join(os.path.dirname(__file__), "logs")
 FIG_DIR = os.path.join(os.path.dirname(__file__), "figures")
+# "last 20%" asymptotic window = last 4 eval points (105k-120k here).
+TAIL_EVAL_POINTS = 4
 
 
 def arm_of(run_dir: str) -> str:
@@ -51,35 +54,6 @@ def load_runs():
     return runs
 
 
-def welch(a, b):
-    """Welch's t-test (two-sided), normal approx. Returns (t, p). No scipy."""
-    a, b = np.asarray(a, float), np.asarray(b, float)
-    ma, mb = a.mean(), b.mean()
-    va, vb = a.var(ddof=1), b.var(ddof=1)
-    na, nb = len(a), len(b)
-    se = math.sqrt(va / na + vb / nb)
-    if se == 0:
-        return 0.0, 1.0
-    t = (ma - mb) / se
-    p = 2 * (1 - 0.5 * (1 + math.erf(abs(t) / math.sqrt(2))))
-    return t, p
-
-
-def oneway_anova(groups):
-    """One-way ANOVA (F, rough p). groups: list of arrays. Indicative at n=3."""
-    k = len(groups)
-    allv = np.concatenate(groups)
-    grand = allv.mean()
-    ssb = sum(len(g) * (g.mean() - grand) ** 2 for g in groups)
-    ssw = sum(((g - g.mean()) ** 2).sum() for g in groups)
-    dfb, dfw = k - 1, len(allv) - k
-    if ssw == 0:
-        return 0.0, 1.0
-    F = (ssb / dfb) / (ssw / dfw)
-    p = math.exp(-0.5 * abs(F))  # rough; indicative only at n=3
-    return F, p
-
-
 def main():
     os.makedirs(FIG_DIR, exist_ok=True)
     runs = load_runs()
@@ -92,9 +66,6 @@ def main():
             all_max = max(all_max, int(ev["env_step"].max()))
     grid = np.arange(5000, all_max + 1, 5000)
 
-    plt.figure(figsize=(7, 4.5))
-    summary = {}
-    per_seed = {}
     colors = {"Baseline (reward_scale=1.0)": "#1f77b4",
               "RewardScaled (reward_scale=0.1)": "#d62728",
               "FixedAlpha (auto_tune=off)": "#2ca02c"}
@@ -102,6 +73,10 @@ def main():
              "RewardScaled (reward_scale=0.1)": "RewardScaled",
              "FixedAlpha (auto_tune=off)": "FixedAlpha"}
 
+    # ---- Learning curves: mean line +- 1 SD across seeds ----
+    plt.figure(figsize=(7, 4.5))
+    summary = {}
+    per_seed = {}
     for arm, rs in sorted(runs.items()):
         interp = []
         for seed, ev in sorted(rs):
@@ -110,21 +85,20 @@ def main():
             interp.append(y)
         arr = np.vstack(interp)
         mean = arr.mean(axis=0)
-        sem = arr.std(axis=0, ddof=1) / np.sqrt(arr.shape[0])
-        ci = 1.96 * sem
+        sd = arr.std(axis=0, ddof=1)
         c = colors.get(arm, "#333333")
-        plt.plot(grid, mean, color=c, label=f"{arm} (n={arr.shape[0]})")
-        plt.fill_between(grid, mean - ci, mean + ci, color=c, alpha=0.2)
+        plt.plot(grid, mean, color=c, label=f"{short.get(arm,arm)} (n={arr.shape[0]})")
+        plt.fill_between(grid, mean - sd, mean + sd, color=c, alpha=0.2)
 
-        tail = arr[:, -max(1, int(0.2 * arr.shape[1])):]
+        tail = arr[:, -TAIL_EVAL_POINTS:]
         tail_per_seed = tail.mean(axis=1)
-        summary[arm] = (tail_per_seed.mean(), tail_per_seed.std(ddof=1) /
-                        np.sqrt(len(tail_per_seed)), len(tail_per_seed))
+        summary[arm] = tail_per_seed
         per_seed[arm] = tail_per_seed
 
     plt.xlabel("environment steps")
     plt.ylabel("deterministic eval return (5 episodes)")
-    plt.title(f"SAC on Hopper-v4: reward scaling (CPU, {all_max//1000}k steps/run)")
+    plt.title(f"SAC on Hopper-v4 (CPU, {all_max//1000}k steps/run); "
+              f"shade = +/- 1 SD across seeds")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -132,37 +106,49 @@ def main():
     plt.savefig(out1, dpi=130)
     print("wrote", out1)
 
-    plt.figure(figsize=(6, 4.5))
+    # ---- Asymptotic: raw seed points + mean + t-based 95% CI (df=n-1) ----
     arms = list(summary.keys())
-    means = [summary[a][0] for a in arms]
-    cis = [1.96 * summary[a][1] for a in arms]
-    plt.bar(range(len(arms)), means, yerr=cis,
-            color=[colors.get(a, "#333") for a in arms], capsize=8, alpha=0.8)
-    plt.xticks(range(len(arms)), [short.get(a, a) for a in arms], rotation=0)
-    plt.ylabel("asymptotic eval return (last 20%)")
-    plt.title("Mean +/- 95% CI (1.96 x SEM) across seeds")
+    n = len(per_seed[arms[0]])
+    tcrit = stats.t.ppf(0.975, df=n - 1)  # 4.303 for n=3
+    means = [summary[a].mean() for a in arms]
+    sds = [summary[a].std(ddof=1) for a in arms]
+    cis = [tcrit * summary[a].std(ddof=1) / np.sqrt(n) for a in arms]
+
+    plt.figure(figsize=(6.5, 4.5))
+    x = np.arange(len(arms))
+    plt.bar(x, means, yerr=cis, color=[colors.get(a, "#333") for a in arms],
+            capsize=8, alpha=0.55)
+    # overlay raw seed points, jittered
+    rng = np.random.default_rng(0)
+    for i, a in enumerate(arms):
+        jitter = rng.uniform(-0.08, 0.08, size=len(per_seed[a]))
+        plt.scatter(x[i] + jitter, per_seed[a], color=colors.get(a, "#333"),
+                    zorder=3, s=28, edgecolor="black", linewidth=0.5)
+    plt.xticks(x, [short.get(a, a) for a in arms])
+    plt.ylabel("asymptotic eval return (last 4 eval points)")
+    plt.title(f"mean + t-based 95% CI (df={n-1}); dots = individual seeds")
     plt.grid(alpha=0.3, axis="y")
     plt.tight_layout()
     out2 = os.path.join(FIG_DIR, "asymptotic.png")
     plt.savefig(out2, dpi=130)
     print("wrote", out2)
 
-    print("\n=== Asymptotic (last 20% eval return) ===")
-    for a, (m, sem, n) in summary.items():
-        print(f"{a:35s} mean={m:8.1f}  95%CI~+/-{1.96*sem:6.1f}  seeds={n}")
+    print(f"\n=== Asymptotic (last {TAIL_EVAL_POINTS} eval points, i.e. 105k-120k) ===")
+    for a in arms:
+        v = summary[a]
+        print(f"{short.get(a,a):14s} mean={v.mean():8.1f}  SD={v.std(ddof=1):7.1f}  "
+              f"t95%CI=+/-{tcrit*v.std(ddof=1)/np.sqrt(n):6.1f}  seeds={list(np.round(v).astype(int))}")
 
-    print("\n=== Pairwise Welch t (indicative; n=3 each, low power) ===")
-    keys = list(summary.keys())
-    for i in range(len(keys)):
-        for j in range(i + 1, len(keys)):
-            t, p = welch(per_seed[keys[i]], per_seed[keys[j]])
-            print(f"{short.get(keys[i],keys[i])} vs {short.get(keys[j],keys[j])}: "
-                  f"t={t:+.2f}  p~{p:.3f}")
+    print("\n=== Pairwise Welch t-test (scipy, equal_var=False) ===")
+    for i in range(len(arms)):
+        for j in range(i + 1, len(arms)):
+            res = stats.ttest_ind(per_seed[arms[i]], per_seed[arms[j]],
+                                  equal_var=False)
+            print(f"{short.get(arms[i],arms[i])} vs {short.get(arms[j],arms[j])}: "
+                  f"t={res.statistic:+.2f}  p={res.pvalue:.3f}")
 
-    if len(keys) >= 2:
-        F, p = oneway_anova([per_seed[k] for k in keys])
-        print(f"\nOne-way ANOVA across {len(keys)} arms: F={F:.2f}  p~{p:.3f} "
-              "(indicative; do not over-interpret at n=3)")
+    F, p = stats.f_oneway(*[summary[a] for a in arms])
+    print(f"\nOne-way ANOVA (scipy.f_oneway): F={F:.2f}  p={p:.3f}")
 
 
 if __name__ == "__main__":

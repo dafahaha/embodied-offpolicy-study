@@ -42,13 +42,17 @@ confirmed" and stopped there.
 
 Then I restored the pre-registered 120k budget and added a **fixed-alpha control**
 arm (scale=0.1, alpha frozen at 0.2, no auto-tune) to separate reward scaling from
-the auto-tuned alpha trajectory. At 120k, 3 seeds each:
+the auto-tuned alpha trajectory. Asymptotic window = last 4 eval points (105k–
+120k). At 120k, 3 seeds each, reported as mean ± SD:
 
-- Baseline (scale=1.0, auto alpha): 1085 +/- 790.
-- RewardScaled (scale=0.1, auto alpha): 1118 +/- 705.
-- FixedAlpha (scale=0.1, alpha=0.2 fixed): 1404 +/- 715.
+- Baseline (scale=1.0, auto alpha): 1085 ± 698.
+- RewardScaled (scale=0.1, auto alpha): 1118 ± 623.
+- FixedAlpha (scale=0.1, alpha=0.2 fixed): 1404 ± 632.
 
-Pairwise Welch p in [0.55, 0.95]; one-way ANOVA F=0.22, p~0.90.
+Exact scipy tests: pairwise Welch (`ttest_ind`, equal_var=False) p = 0.589 / 0.953
+/ 0.607; one-way ANOVA (`f_oneway`) F=0.22, p=0.811. At n=3 the t-based 95% CI
+(df=2) half-widths are ~±1550–1730, i.e. huge — I report SD and plot the raw seed
+dots rather than quoting a tidy 1.96×SEM interval that would look falsely precise.
 
 **The 60k "effect" did not survive.** At full budget all three arms are
 indistinguishable, and the fixed-alpha arm is if anything slightly higher than the

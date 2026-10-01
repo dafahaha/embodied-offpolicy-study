@@ -31,8 +31,9 @@ Direction: `RewardScaled >= Baseline`. We explicitly allow the result to come
 out the other way; the point is a controlled, multi-seed measurement.
 
 ## Primary outcome
-Mean deterministic eval return (5 episodes per eval point) over the last 20% of
-training steps, averaged across 3 seeds, reported as mean +/- 95% CI.
+Mean deterministic eval return (5 episodes per eval point) over the **last 20% of
+training = the last 4 eval points (105k–120k steps)**, averaged across 3 seeds,
+reported as mean ± SD (with t-based 95% CI, df=2, n=3).
 
 ## Design
 - Env: Hopper-v4 (gymnasium 1.3.0, mujoco 3.14.0).

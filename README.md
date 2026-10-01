@@ -56,29 +56,34 @@ per arm. Three arms: Baseline (scale=1.0, auto alpha), RewardScaled (scale=0.1,
 auto alpha), and FixedAlpha (scale=0.1, alpha frozen at 0.2, no auto-tune — this arm
 separates "reward scaling" from "auto-tuned alpha dynamics").
 
-| Arm | asymptotic return (last 20%, mean) | 95% CI |
-|---|---|---|
-| Baseline (reward_scale=1.0) | **1085** | +/- 790 |
-| RewardScaled (reward_scale=0.1) | **1118** | +/- 705 |
-| FixedAlpha (auto_tune=off) | **1404** | +/- 715 |
+Asymptotic window = **last 4 eval points (105k–120k)** = last 20% of training.
+
+| Arm | asymptotic return (mean ± SD, n=3) |
+|---|---|
+| Baseline (reward_scale=1.0) | **1085 ± 698** |
+| RewardScaled (reward_scale=0.1) | **1118 ± 623** |
+| FixedAlpha (auto_tune=off) | **1404 ± 632** |
 
 Per-seed tail means: baseline = 547, 833, 1873; reward-scaled = 645, 886, 1824;
 fixed-alpha = 1039, 1039, 2133.
 
-Stats (`python plot.py`): pairwise Welch t all |t|<0.6, p in [0.55, 0.95]; one-way
-ANOVA across the three arms F=0.22, p~0.90.
+Stats (`python plot.py`, scipy exact distributions; n=3, df=2): the t-based 95% CI
+half-widths are ~±1550–1730 (t₀.₉₇₅,₂ = 4.303), showing how little n=3 actually
+pins the mean. Pairwise Welch t (`ttest_ind`, equal_var=False): Baseline vs
+FixedAlpha p=0.589; Baseline vs RewardScaled p=0.953; FixedAlpha vs RewardScaled
+p=0.607. One-way ANOVA (`f_oneway`): F=0.22, p=0.811.
 
 **Interpretation (honest): at 120k steps there is no detectable effect.** All three
 arms land on statistically indistinguishable means with large seed-to-seed variance.
 The earlier 60k run looked like reward-scaling won by ~3x; restoring the
 pre-registered 120k budget and adding the fixed-alpha control shows that was seed
 noise, not a real benefit. Fixed-alpha sits a little higher on average but nowhere
-near significantly. I am explicitly **not** claiming reward scaling helps — the data
-say it does not, at this budget and variance.
+near significantly (all p > 0.58). I am explicitly **not** claiming reward scaling
+helps — the data say it does not, at this budget and variance.
 
-![SAC learning curves on Hopper-v4 (mean +/- 95% CI across seeds)](figures/learning_curve.png)
+![SAC learning curves on Hopper-v4; shade = +/- 1 SD across seeds](figures/learning_curve.png)
 
-![Asymptotic eval return with 95% CI](figures/asymptotic.png)
+![Asymptotic eval return: mean + t-based 95% CI (df=2), dots = individual seeds](figures/asymptotic.png)
 
 The summary table and statistics are reproduced by running `python plot.py` on the
 committed CSVs.
