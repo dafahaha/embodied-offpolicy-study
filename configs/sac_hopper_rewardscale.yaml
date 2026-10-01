@@ -1,7 +1,7 @@
 # SAC on Hopper-v4 with reward scaling 0.1 (scales rewards entering the critic).
 # Identical to baseline except reward_scale.
 env_id: Hopper-v4
-total_steps: 60000
+total_steps: 120000
 start_steps: 1000
 replay_size: 1000000
 batch_size: 256

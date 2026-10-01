@@ -1,7 +1,6 @@
 # SAC baseline on Hopper-v4 (no reward scaling).
-# Budget reduced to 60k steps (shared CPU/RAM machine; see README limitations).
 env_id: Hopper-v4
-total_steps: 60000
+total_steps: 120000
 start_steps: 1000
 replay_size: 1000000
 batch_size: 256

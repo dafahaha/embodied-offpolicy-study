@@ -36,29 +36,42 @@ have the right sign/magnitude (Q sign here) before burning GPU/CPU hours.
 
 ## What the data said
 
-Asymptotic eval return (last 20% of training), mean over 3 seeds:
+First pass at 60k steps (after an OOM cut) looked like reward scaling won:
+scaled mean 1087 vs baseline 363. I honestly flagged it as "directional, not
+confirmed" and stopped there.
 
-- Baseline (reward_scale=1.0): **363** +/- 210.
-- RewardScaled (reward_scale=0.1): **1087** +/- 1029.
+Then I restored the pre-registered 120k budget and added a **fixed-alpha control**
+arm (scale=0.1, alpha frozen at 0.2, no auto-tune) to separate reward scaling from
+the auto-tuned alpha trajectory. At 120k, 3 seeds each:
 
-Per-seed final eval: baseline 250 / 613 / 336; scaled 591 / 606 / 1375.
+- Baseline (scale=1.0, auto alpha): 1085 +/- 790.
+- RewardScaled (scale=0.1, auto alpha): 1118 +/- 705.
+- FixedAlpha (scale=0.1, alpha=0.2 fixed): 1404 +/- 715.
 
-So on average scaling rewards down helped, and the scaled arm's curve does pull
-away earlier. But be honest about what that means: the scaled mean is carried by
-one seed that exploded to ~1375; the other two seeds were ~600, which is only
-modestly above the baseline's best seed. The error bars overlap. At n=3 and 60k
-steps I'd call this "consistent with the hypothesis" — not "reward scaling wins".
-If I had to stake a claim on it I'd want 5+ seeds and more steps.
+Pairwise Welch p in [0.55, 0.95]; one-way ANOVA F=0.22, p~0.90.
+
+**The 60k "effect" did not survive.** At full budget all three arms are
+indistinguishable, and the fixed-alpha arm is if anything slightly higher than the
+auto-tuned scaled arm — so the earlier gap was early-training seed noise, not
+reward scaling doing anything. That's the real result: a null. I'm not going to
+pretend the first 60k numbers meant something.
+
+The honest takeaway is the process: a pre-registered hypothesis, a control arm,
+and enough budget to actually test it overturned a tempting-looking result. With
+n=3 and this variance we have essentially zero power, so "no detectable effect" is
+what I can claim — not "reward scaling has no effect".
 
 ## Budget honesty
 
-- CPU only. **60k env steps per run** (I planned 120k, but the first 6-wide
-  parallel batch got OOM-killed on a shared machine with only ~8GB free, so I
-  cut to 60k and ran 3-wide). This is a small-budget ablation, not a benchmark.
-- 3 seeds per arm. Effect sizes are within seed noise; I report them as such.
+- CPU only. **120k env steps per run** (restored). First attempt at 6-wide was
+  OOM-killed on a shared machine; the runner now gates on >=8GB free RAM and
+  caps at 3 concurrent, 4 torch threads each.
+- 3 seeds per arm. Large seed-to-seed variance (one seed per arm tends to run
+  away to ~1800-2100, others sit ~600-1000); I report it, don't smooth it away.
 - Only Hopper. No HalfCheetah, no 1M steps.
 
 ## What I'd do next
 
-Resume/checkpointing so a killed run continues instead of restarting; normalised
-rewards as a third arm; more seeds once I have a box that isn't shared.
+Many more seeds (10+) before claiming anything; checkpointing so a killed run
+resumes; normalised rewards as another arm; and treat any "looks better" early
+curve as provisional until a control arm and full budget are in.

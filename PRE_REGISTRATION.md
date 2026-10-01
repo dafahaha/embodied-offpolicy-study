@@ -47,3 +47,12 @@ training steps, averaged across 3 seeds, reported as mean +/- 95% CI.
 - We will not extrapolate to HalfCheetah / 1M-step regimes.
 - A single-seed winner would not be called a result; we report seed spread.
 
+## Amendment (logged after the first 60k pass)
+- Budget restored to the pre-registered **120k** (first 6-wide batch was OOM-killed;
+  reran 3-wide with a >=8GB-free-RAM gate).
+- Added a third arm, **FixedAlpha** (`reward_scale=0.1`, `automatic_entropy_tuning=
+  false`, `alpha=0.2` frozen), to separate "reward scaling" from the auto-tuned
+  alpha trajectory. This was added *before* inspecting the 120k curves, to address
+  a confound noticed at 60k (the scaled arm's alpha was drifting down).
+- Final outcome is a null: see README / RESEARCH_RETRO.
+
