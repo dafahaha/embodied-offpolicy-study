@@ -1,4 +1,4 @@
-# Pre-registration (before any Hopper result was inspected)
+﻿# Pre-registration (before any Hopper result was inspected)
 
 Written 2026-10-01, immediately after Pendulum validation and before launching any
 Hopper run. No Hopper return numbers below were known at write time.
@@ -46,3 +46,4 @@ training steps, averaged across 3 seeds, reported as mean +/- 95% CI.
 - This is not a benchmark SOTA run; 120k steps is a small, CPU-feasible budget.
 - We will not extrapolate to HalfCheetah / 1M-step regimes.
 - A single-seed winner would not be called a result; we report seed spread.
+

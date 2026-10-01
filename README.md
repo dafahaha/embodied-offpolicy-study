@@ -10,8 +10,9 @@ real research ability for a PhD (Embodied AI / RL) application.
 - **Study**: does critic-side **reward scaling** (0.1 vs 1.0) change sample
   efficiency / asymptotic return? 3 seeds per arm. Pre-registered in
   `PRE_REGISTRATION.md`.
-- **Hardware honesty**: all runs are **CPU only**, **120k env steps per run**.
-  This is *not* a 1M-step benchmark; numbers are reported as measured.
+- **Hardware honesty**: all runs are **CPU only**, **60k env steps per run**
+  (planned 120k, cut because a 6-wide parallel batch got OOM-killed on a shared
+  machine). This is *not* a 1M-step benchmark; numbers are reported as measured.
 
 ## Layout
 
@@ -49,11 +50,25 @@ python plot.py
 
 ## Results
 
-<!-- Numbers filled in from the committed logs after all runs finished. -->
+Deterministic eval return (5 episodes), Hopper-v4, CPU, 60k steps/run, 3 seeds:
 
-See `figures/learning_curve.png` and `figures/asymptotic.png`. Summary table is
-printed by `python plot.py`. Interpretation and limitations live in
-`RESEARCH_RETRO.md`.
+| Arm | asymptotic return (last 20%, mean) | 95% CI across seeds |
+|---|---|---|
+| Baseline (reward_scale=1.0) | **363** | +/- 210 |
+| RewardScaled (reward_scale=0.1) | **1087** | +/- 1029 |
+
+Per-seed final eval points: baseline = 250, 613, 336; reward-scaled = 591, 606,
+1375.
+
+**Interpretation (honest):** the mean points the way I pre-registered (scaling
+rewards down helps), and the learning curve trends upward earlier for the scaled
+arm. But the reward-scaled CI is enormous because one seed ran away to ~1375 while
+the other two sat at ~600, and the two confidence intervals overlap heavily. With
+n=3 and 60k steps this is a **directional signal, not a confirmed effect**. I am
+not claiming a win.
+
+See `figures/learning_curve.png` and `figures/asymptotic.png`. The summary table
+is reproduced by running `python plot.py` on the committed CSVs.
 
 ## CI
 
@@ -66,9 +81,9 @@ printed by `python plot.py`. Interpretation and limitations live in
 
 ## Honest limitations
 
-- Single environment (Hopper-v4), 120k steps, CPU. Not SOTA, not 1M steps.
+- Single environment (Hopper-v4), **60k steps**, CPU. Not SOTA, not 1M steps.
 - Reward scaling is a known sensitivity; this is a controlled ablation, not a new
-  algorithm. Effect size is small and seed-dependent; n=3.
+  algorithm. Effect is large but within seed noise; n=3.
 - We bootstrap on time-limit truncation (correct), but do not normalise rewards.
 - MuJoCo env warned that Hopper-v4 is superseded by v5; we stayed on v4 to match
   classic SAC benchmarks.

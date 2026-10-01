@@ -36,7 +36,19 @@ have the right sign/magnitude (Q sign here) before burning GPU/CPU hours.
 
 ## What the data said
 
-<!-- Filled after runs; see figures/ and the plot.py summary. -->
+Asymptotic eval return (last 20% of training), mean over 3 seeds:
+
+- Baseline (reward_scale=1.0): **363** +/- 210.
+- RewardScaled (reward_scale=0.1): **1087** +/- 1029.
+
+Per-seed final eval: baseline 250 / 613 / 336; scaled 591 / 606 / 1375.
+
+So on average scaling rewards down helped, and the scaled arm's curve does pull
+away earlier. But be honest about what that means: the scaled mean is carried by
+one seed that exploded to ~1375; the other two seeds were ~600, which is only
+modestly above the baseline's best seed. The error bars overlap. At n=3 and 60k
+steps I'd call this "consistent with the hypothesis" — not "reward scaling wins".
+If I had to stake a claim on it I'd want 5+ seeds and more steps.
 
 ## Budget honesty
 

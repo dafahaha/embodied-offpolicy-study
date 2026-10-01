@@ -1,4 +1,4 @@
-"""Plot learning curves and summary stats from raw per-run progress.csv files.
+﻿"""Plot learning curves and summary stats from raw per-run progress.csv files.
 
 Usage:
     python plot.py
@@ -88,7 +88,7 @@ def main():
 
     plt.xlabel("environment steps")
     plt.ylabel("deterministic eval return (5 episodes)")
-    plt.title("SAC on Hopper-v4: reward scaling (CPU, 120k steps/run)")
+    plt.title("SAC on Hopper-v4: reward scaling (CPU, 60k steps/run)")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -119,3 +119,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
