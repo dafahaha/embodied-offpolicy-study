@@ -18,7 +18,9 @@ real research ability for a PhD (Embodied AI / RL) application.
 
 ```
 src/            from-scratch SAC (replay buffer, actor, twin critic, agent)
-tests/          pytest: buffer sampling, actor bounds/logprob, critic shapes
+tests/          pytest: buffer sampling, actor bounds/logprob & rescale Jacobian, critic shapes,
+                one SAC update step, reward_scale scaling, scipy stats, Pendulum learn gate,
+                train divergence guard, plot grid/non-finite guards
 configs/        YAML per setting (pendulum_ci, pendulum, hopper baseline/rewardscale/fixedalpha)
 train.py        training loop -> logs/<run>/progress.csv (per-episode + eval rows)
 ci_check.py     fast Pendulum learn-gate used by CI
@@ -48,6 +50,16 @@ python train.py --config configs/sac_hopper_fixedalpha.yaml  --seed 0 --out logs
 # plot from the raw CSVs
 python plot.py
 ```
+
+## Actual resolved environment (prereg vs pinned)
+
+`PRE_REGISTRATION.md` names gymnasium 1.3.0 / mujoco 3.14.0 as the planned stack.
+The environment that actually produced — and that `requirements.txt` now pins to
+reproduce — the committed Hopper CSVs is gymnasium **1.4.0** / mujoco **3.15.0**.
+These are minor bumps and Hopper-v4 reward semantics are unchanged across them,
+so the numbers are directly comparable. I am leaving `PRE_REGISTRATION.md` as-is:
+it is a dated record of what was planned, and rewriting "1.3.0" to "1.4.0" would
+be retroediting history. The discrepancy is logged here instead.
 
 ## Results
 

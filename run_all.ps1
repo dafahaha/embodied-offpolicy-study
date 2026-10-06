@@ -43,13 +43,35 @@ foreach ($j in $jobs) {
   $p = Start-Process -FilePath $py -ArgumentList "train.py","--config",$j.cfg,"--seed",$j.seed,"--out",$j.out `
         -NoNewWindow -PassThru `
         -RedirectStandardError "$($j.out).err.txt" -RedirectStandardOutput "$($j.out).out.txt"
-  $running += $p
+  $running += @{ p = $p; j = $j }
   Write-Host "started $($j.out) pid=$($p.Id)"
   if ($running.Count -ge 3) {
-    $running | Wait-Process
+    $running | ForEach-Object { $_.p } | Wait-Process
+    # Surface child failures: train.py exits 3 on divergence, so a non-zero
+    # code here means that arm's CSV is truncated. Don't pretend "ALL DONE".
+    $failed = $false
+    foreach ($r in $running) {
+      $code = $r.p.ExitCode
+      if ($code -ne 0) {
+        Write-Error "FAILED: $($r.j.out) (config=$($r.j.cfg) seed=$($r.j.seed)) exited with code $code; see $($r.j.out).err.txt"
+        $failed = $true
+      }
+    }
     $running = @()
+    if ($failed) { exit 1 }
     Write-Host "--- wave done ---"
   }
 }
-if ($running.Count -gt 0) { $running | Wait-Process }
+if ($running.Count -gt 0) {
+  $running | ForEach-Object { $_.p } | Wait-Process
+  $failed = $false
+  foreach ($r in $running) {
+    $code = $r.p.ExitCode
+    if ($code -ne 0) {
+      Write-Error "FAILED: $($r.j.out) (config=$($r.j.cfg) seed=$($r.j.seed)) exited with code $code; see $($r.j.out).err.txt"
+      $failed = $true
+    }
+  }
+  if ($failed) { exit 1 }
+}
 Write-Host "ALL DONE"

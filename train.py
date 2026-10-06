@@ -41,6 +41,40 @@ def evaluate(agent: SAC, env_id: str, seed: int, episodes: int = 5) -> float:
     return float(np.mean(returns))
 
 
+# Soft magnitude guard: |Q1| above this (on a reward-scale ~= 1 env) usually
+# means the critics are blowing up even though the values are still finite
+# floats. We only WARN, never abort — Mujoco envs legitimately reach large
+# asymptotic returns, and a hard abort here would false-positive on them.
+Q1_MEAN_WARN_ABS = 1e4
+
+
+def _guard_metrics(metrics: dict, step: int) -> None:
+    """Hard-abort (exit 3) on any non-finite loss/logp; soft-warn on runaway Q.
+
+    Split out of the training loop so it can be unit-tested directly.
+    """
+    for k in ("critic_loss", "actor_loss", "q1_mean", "logp_mean"):
+        v = float(metrics.get(k, float("nan")))
+        if not np.isfinite(v):
+            print(
+                f"FATAL: training diverged — {k}={v} at env_step={step} "
+                f"(critic_loss={metrics.get('critic_loss')}, "
+                f"actor_loss={metrics.get('actor_loss')}, "
+                f"q1_mean={metrics.get('q1_mean')}, "
+                f"logp_mean={metrics.get('logp_mean')}).",
+                file=sys.stderr,
+            )
+            sys.exit(3)
+    q1 = float(metrics["q1_mean"])
+    if abs(q1) > Q1_MEAN_WARN_ABS:
+        print(
+            f"WARNING: |q1_mean|={q1:.1f} > {Q1_MEAN_WARN_ABS:.0e} at "
+            f"env_step={step} — critics may be blowing up (soft guard: "
+            f"continuing, see train.py Q1_MEAN_WARN_ABS).",
+            file=sys.stderr,
+        )
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--config", required=True)
@@ -112,17 +146,7 @@ def main():
             last_metrics = agent.update(buf.sample(batch_size))
             # Divergence guard: abort loudly instead of writing NaN/Inf into
             # progress.csv (plot.py would otherwise spread it over the stats).
-            for k in ("critic_loss", "actor_loss", "q1_mean"):
-                v = float(last_metrics.get(k, float("nan")))
-                if not np.isfinite(v):
-                    print(
-                        f"FATAL: training diverged — {k}={v} at env_step={step} "
-                        f"(critic_loss={last_metrics.get('critic_loss')}, "
-                        f"actor_loss={last_metrics.get('actor_loss')}, "
-                        f"q1_mean={last_metrics.get('q1_mean')}).",
-                        file=sys.stderr,
-                    )
-                    sys.exit(3)
+            _guard_metrics(last_metrics, step)
 
         if terminated or truncated:
             ep += 1

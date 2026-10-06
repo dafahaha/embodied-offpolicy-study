@@ -1,12 +1,15 @@
 import numpy as np
+import pandas as pd
 import torch
+import pytest
 from pytest import approx
 
 from src.replay_buffer import ReplayBuffer
 from src.networks import SquashedGaussianActor, TwinCritic
 from src.sac import SAC
 from ci_check import learn_gate_pass
-from plot import asymptotic_stats
+from plot import asymptotic_stats, validate_grid_and_counts, load_runs
+import train as train_mod
 
 
 def test_replay_buffer_shapes_and_circular():
@@ -176,3 +179,87 @@ def test_learn_gate_delta_50_fails():
         [-1200.0, -1180.0, -1150.0, -1150.0])
     assert delta == approx(50.0)
     assert passed is False
+
+
+# ---------------------------------------------------------------------------
+# N-GATE: empty eval series must be a clean FAIL, not a bare IndexError.
+# ---------------------------------------------------------------------------
+def test_learn_gate_empty_series_is_clean_fail():
+    passed, delta, first, tail = learn_gate_pass([])
+    assert passed is False
+    assert delta == 0.0
+    assert np.isnan(first) and np.isnan(tail)
+
+
+# ---------------------------------------------------------------------------
+# G4: train.py divergence guard. Non-finite logp must abort with exit code 3;
+# a finite-but-huge q1_mean must warn (not abort).
+# ---------------------------------------------------------------------------
+def test_guard_aborts_on_nonfinite_logp():
+    bad = {"critic_loss": 1.0, "actor_loss": 1.0,
+           "q1_mean": 1.0, "logp_mean": float("nan")}
+    with pytest.raises(SystemExit) as ei:
+        train_mod._guard_metrics(bad, step=1001)
+    assert ei.value.code == 3
+
+
+def test_guard_warns_on_large_q1_but_does_not_abort(capsys):
+    ok = {"critic_loss": 1.0, "actor_loss": 1.0,
+          "q1_mean": 2e4, "logp_mean": -1.0}
+    train_mod._guard_metrics(ok, step=1001)  # no SystemExit
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "q1_mean" in err
+
+
+# ---------------------------------------------------------------------------
+# T1: plot.py grid/count/non-finite guards as pure functions / synthetic CSV.
+# ---------------------------------------------------------------------------
+def _ev_df(steps):
+    return pd.DataFrame({"env_step": list(steps),
+                         "eval_return": [100.0] * len(steps)})
+
+
+def test_validate_grid_aligned_passes():
+    runs = {
+        "A": [(0, _ev_df([5000, 10000, 120000])),
+              (1, _ev_df([5000, 10000, 120000]))],
+        "B": [(0, _ev_df([5000, 10000, 120000])),
+              (1, _ev_df([5000, 10000, 120000]))],
+    }
+    grid = validate_grid_and_counts(runs)
+    assert list(grid) == [5000, 10000, 120000]
+
+
+def test_validate_grid_missing_end_point_raises():
+    # equal seed counts (2 each) so we reach the grid comparison; one arm's
+    # runs were killed before the final eval at 120000.
+    runs = {
+        "A": [(0, _ev_df([5000, 10000, 120000])),
+              (1, _ev_df([5000, 10000, 120000]))],
+        "B": [(0, _ev_df([5000, 10000])),
+              (1, _ev_df([5000, 10000]))],
+    }
+    with pytest.raises(SystemExit, match="missing"):
+        validate_grid_and_counts(runs)
+
+
+def test_validate_grid_unequal_seed_counts_raises():
+    runs = {
+        "A": [(0, _ev_df([5000])), (1, _ev_df([5000]))],
+        "B": [(0, _ev_df([5000]))],
+    }
+    with pytest.raises(SystemExit, match="unequal seed counts"):
+        validate_grid_and_counts(runs)
+
+
+def test_load_runs_rejects_nonfinite_eval_return(tmp_path, monkeypatch):
+    run = tmp_path / "hopper_baseline_s0"
+    run.mkdir()
+    pd.DataFrame({
+        "env_step": [5000, 10000],
+        "phase": ["eval", "eval"],
+        "eval_return": [100.0, float("nan")],
+    }).to_csv(run / "progress.csv", index=False)
+    monkeypatch.setattr("plot.LOG_ROOT", str(tmp_path))
+    with pytest.raises(ValueError, match="non-finite eval_return"):
+        load_runs()
