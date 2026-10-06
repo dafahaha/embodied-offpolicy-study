@@ -1,4 +1,4 @@
-torch>=2.0
+torch==2.14.1
 # Pinned to the interpreter that produced the committed logs (reproducibility):
 # numpy/pandas/matplotlib/scipy/gymnasium exact, mujoco explicit (was previously
 # pulled transitively and not pinned, despite preregistration naming it).
