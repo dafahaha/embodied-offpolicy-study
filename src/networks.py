@@ -21,7 +21,8 @@ class SquashedGaussianActor(nn.Module):
     """Tanh-squashed diagonal Gaussian policy.
 
     Outputs actions already scaled to the environment's action bounds.
-    log_prob includes the tanh Jacobian correction.
+    log_prob includes both the tanh Jacobian and the linear rescale (act_scale)
+    correction, so it is the density w.r.t. env actions.
     """
 
     def __init__(self, obs_dim: int, act_dim: int, act_low: torch.Tensor,
@@ -33,8 +34,8 @@ class SquashedGaussianActor(nn.Module):
         self.register_buffer("act_low", act_low)
         self.register_buffer("act_high", act_high)
         # inactive [-1, 1] range of tanh maps linearly to [low, high]
-        self.act_scale = (self.act_high - self.act_low) / 2.0
-        self.act_bias = (self.act_high + self.act_low) / 2.0
+        self.register_buffer("act_scale", (self.act_high - self.act_low) / 2.0)
+        self.register_buffer("act_bias", (self.act_high + self.act_low) / 2.0)
 
     def forward(self, obs, deterministic=False, with_logprob=True):
         h = self.net(obs)
@@ -69,11 +70,14 @@ class SquashedGaussianActor(nn.Module):
         logp -= torch.sum(
             torch.log(1.0 - torch.tanh(pre_tanh) ** 2 + 1e-6), dim=-1, keepdim=True
         )
+        # Linear action-rescale Jacobian: a = scale*tanh(u)+bias, so dP/da =
+        # dP/du / |scale|. For unit-bound envs (scale=1) this term is exactly 0.
+        logp -= torch.sum(torch.log(self.act_scale), dim=-1, keepdim=True)
         return logp
 
 
 class TwinCritic(nn.Module):
-    """Two independent Q-networks (twin delayed / clipped double Q)."""
+    """Two independent Q-networks (twin clipped critics; min over Q1, Q2)."""
 
     def __init__(self, obs_dim: int, act_dim: int, hidden_sizes=(256, 256)):
         super().__init__()

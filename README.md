@@ -67,11 +67,21 @@ Asymptotic window = **last 4 eval points (105k–120k)** = last 20% of training.
 Per-seed tail means: baseline = 547, 833, 1873; reward-scaled = 645, 886, 1824;
 fixed-alpha = 1039, 1039, 2133.
 
+*Footnote:* the per-seed numbers above are a set, not ordered by seed; read in
+seed order (s0, s1, s2) they are baseline 547 / 1873 / 833, reward-scaled
+645 / 886 / 1824, fixed-alpha 2133 / 1039 / 1039. The two ~1039 fixed-alpha
+values are real (seeds 1 and 2 both plateau), not a copy-paste error.
+
 Stats (`python plot.py`, scipy exact distributions; n=3, df=2): the t-based 95% CI
 half-widths are ~±1550–1730 (t₀.₉₇₅,₂ = 4.303), showing how little n=3 actually
 pins the mean. Pairwise Welch t (`ttest_ind`, equal_var=False): Baseline vs
 FixedAlpha p=0.589; Baseline vs RewardScaled p=0.953; FixedAlpha vs RewardScaled
 p=0.607. One-way ANOVA (`f_oneway`): F=0.22, p=0.811.
+
+Note: the third arm (FixedAlpha) and the pairwise Welch tests / ANOVA are
+exploratory post-hoc analyses (added after the 60k pass, uncorrected for
+multiple comparisons); the **pre-registered primary contrast is Baseline vs
+RewardScaled**.
 
 **Interpretation (honest): at 120k steps there is no detectable effect.** All three
 arms land on statistically indistinguishable means with large seed-to-seed variance.

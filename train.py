@@ -11,13 +11,12 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import sys
 import time
 
 import gymnasium as gym
 import numpy as np
 import torch
-
-torch.set_num_threads(4)  # cap CPU threads so the host shell stays responsive
 
 from src.sac import SAC
 from src.replay_buffer import ReplayBuffer
@@ -49,6 +48,8 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--device", default="cpu")
     args = p.parse_args()
+
+    torch.set_num_threads(4)  # cap CPU threads so the host shell stays responsive
 
     cfg = load_config(args.config)
     set_seed(args.seed)
@@ -109,6 +110,19 @@ def main():
 
         if step >= start_steps:
             last_metrics = agent.update(buf.sample(batch_size))
+            # Divergence guard: abort loudly instead of writing NaN/Inf into
+            # progress.csv (plot.py would otherwise spread it over the stats).
+            for k in ("critic_loss", "actor_loss", "q1_mean"):
+                v = float(last_metrics.get(k, float("nan")))
+                if not np.isfinite(v):
+                    print(
+                        f"FATAL: training diverged — {k}={v} at env_step={step} "
+                        f"(critic_loss={last_metrics.get('critic_loss')}, "
+                        f"actor_loss={last_metrics.get('actor_loss')}, "
+                        f"q1_mean={last_metrics.get('q1_mean')}).",
+                        file=sys.stderr,
+                    )
+                    sys.exit(3)
 
         if terminated or truncated:
             ep += 1

@@ -8,9 +8,30 @@ import os
 import subprocess
 import sys
 
+import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(__file__)
+
+# Margin (in eval-return points): ~2x the healthy Δ observed on Pendulum seed 0
+# at 4k steps. A log-prob-collapse policy keeps eval ~constant (Δ≈0) and fails.
+LEARN_DELTA = 150.0
+
+
+def learn_gate_pass(eval_returns):
+    """Pure pass/fail decision on a sorted-by-step eval_return series.
+
+    Pendulum rewards are negative, so "improved" means Δ > 0. We compare the
+    mean of the last 2 eval points against the *first* eval point (step 1000,
+    right after learning starts); averaging the tail dampens single-point noise
+    versus using only the final point.
+    Returns (passed, delta, first, tail_mean).
+    """
+    arr = np.asarray(eval_returns, dtype=float)
+    first = float(arr[0])
+    tail_mean = float(arr[-2:].mean())
+    delta = tail_mean - first
+    return delta >= LEARN_DELTA, delta, first, tail_mean
 
 
 def main():
@@ -23,12 +44,11 @@ def main():
 
     df = pd.read_csv(os.path.join(out, "progress.csv"))
     ev = df[df["phase"] == "eval"].sort_values("env_step")
-    first = ev["eval_return"].iloc[0]
-    last = ev["eval_return"].iloc[-1]
-    print(f"CI Pendulum eval: first={first:.1f} last={last:.1f}")
-    # Pendulum rewards are negative; "improved" means last is substantially higher.
-    if last < first + 150:
-        print("FAIL: reward did not improve enough (code likely broken)", file=sys.stderr)
+    passed, delta, first, tail_mean = learn_gate_pass(ev["eval_return"].values)
+    print(f"CI Pendulum eval: first={first:.1f} mean(last 2)={tail_mean:.1f} Δ={delta:+.1f}")
+    if not passed:
+        print(f"FAIL: reward did not improve enough (Δ={delta:+.1f} < {LEARN_DELTA:.0f}); "
+              f"code likely broken", file=sys.stderr)
         sys.exit(1)
     print("PASS: SAC learned on Pendulum")
 

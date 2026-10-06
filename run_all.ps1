@@ -2,8 +2,18 @@
 # Waits for >=8GB free RAM before each wave.
 # Usage: powershell -ExecutionPolicy Bypass -File run_all.ps1
 $ErrorActionPreference = "Continue"
-$py = "C:\Users\hahaha\anaconda3\python.exe"
 Set-Location $PSScriptRoot
+
+# Portable interpreter: honour $env:PYTHON if set, else fall back to "python" on PATH.
+$py = $env:PYTHON
+if (-not $py) { $py = "python" }
+$pyCmd = Get-Command $py -ErrorAction SilentlyContinue
+if (-not $pyCmd) {
+    Write-Error "Python not found: set `$env:PYTHON to your interpreter or put python on PATH (tried: '$py')."
+    exit 1
+}
+$py = $pyCmd.Source
+Write-Host "using interpreter: $py"
 
 $jobs = @(
   @{cfg="configs/sac_hopper_baseline.yaml";    seed=0; out="logs/hopper_baseline_s0"},
