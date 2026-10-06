@@ -52,7 +52,8 @@ foreach ($j in $jobs) {
     $failed = $false
     foreach ($r in $running) {
       $code = $r.p.ExitCode
-      if ($code -ne 0) {
+      if ($null -eq $code) { $code = "(unknown)" }
+      if ($r.p.ExitCode -ne 0) {
         Write-Error "FAILED: $($r.j.out) (config=$($r.j.cfg) seed=$($r.j.seed)) exited with code $code; see $($r.j.out).err.txt"
         $failed = $true
       }
@@ -67,7 +68,8 @@ if ($running.Count -gt 0) {
   $failed = $false
   foreach ($r in $running) {
     $code = $r.p.ExitCode
-    if ($code -ne 0) {
+    if ($null -eq $code) { $code = "(unknown)" }
+    if ($r.p.ExitCode -ne 0) {
       Write-Error "FAILED: $($r.j.out) (config=$($r.j.cfg) seed=$($r.j.seed)) exited with code $code; see $($r.j.out).err.txt"
       $failed = $true
     }

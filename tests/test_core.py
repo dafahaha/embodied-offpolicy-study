@@ -211,6 +211,25 @@ def test_guard_warns_on_large_q1_but_does_not_abort(capsys):
     assert "WARNING" in err and "q1_mean" in err
 
 
+def test_guard_warns_on_huge_finite_logp_but_does_not_abort(capsys):
+    # The recorded incident had log_prob explode to 1e15 — a *finite* float,
+    # so np.isfinite() lets it through. It must still trip the soft guard.
+    bad = {"critic_loss": 1.0, "actor_loss": 1.0,
+           "q1_mean": 1.0, "logp_mean": 1e15}
+    train_mod._guard_metrics(bad, step=1001)  # no SystemExit
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "logp_mean" in err
+
+
+def test_guard_silent_on_healthy_logp(capsys):
+    # Healthy logp_mean ~ -2..-6 and q1 in the hundreds -> no warning at all.
+    ok = {"critic_loss": 1.0, "actor_loss": 1.0,
+          "q1_mean": 50.0, "logp_mean": -3.5}
+    train_mod._guard_metrics(ok, step=1001)
+    err = capsys.readouterr().err
+    assert "WARNING" not in err
+
+
 # ---------------------------------------------------------------------------
 # T1: plot.py grid/count/non-finite guards as pure functions / synthetic CSV.
 # ---------------------------------------------------------------------------

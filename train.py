@@ -25,31 +25,41 @@ from src.utils import set_seed, load_config
 
 def evaluate(agent: SAC, env_id: str, seed: int, episodes: int = 5) -> float:
     env = gym.make(env_id)
-    returns = []
-    for ep in range(episodes):
-        obs, _ = env.reset(seed=seed + 1000 + ep)
-        done = False
-        ep_ret = 0.0
-        while not done:
-            with torch.no_grad():
-                a = agent.act(obs, deterministic=True)
-            obs, r, terminated, truncated, _ = env.step(a)
-            ep_ret += r
-            done = terminated or truncated
-        returns.append(ep_ret)
-    env.close()
+    try:
+        returns = []
+        for ep in range(episodes):
+            obs, _ = env.reset(seed=seed + 1000 + ep)
+            done = False
+            ep_ret = 0.0
+            while not done:
+                with torch.no_grad():
+                    a = agent.act(obs, deterministic=True)
+                obs, r, terminated, truncated, _ = env.step(a)
+                ep_ret += r
+                done = terminated or truncated
+            returns.append(ep_ret)
+    finally:
+        env.close()
     return float(np.mean(returns))
 
 
-# Soft magnitude guard: |Q1| above this (on a reward-scale ~= 1 env) usually
-# means the critics are blowing up even though the values are still finite
-# floats. We only WARN, never abort — Mujoco envs legitimately reach large
-# asymptotic returns, and a hard abort here would false-positive on them.
+# Soft magnitude guards: we only WARN, never abort on these — MuJoCo envs
+# legitimately reach large asymptotic returns, and a hard abort here would
+# false-positive on them. Both are sentinels that fire only when something
+# has actually blown up.
+#
+# Healthy Hopper critics sit at |q1_mean| in the low hundreds (observed max
+# ~207 on the baseline arm), so 1e4 is ~50x above healthy: it trips only on
+# a genuine critic blow-up, not on ordinary training dynamics.
 Q1_MEAN_WARN_ABS = 1e4
+# Healthy logp_mean is about -2..-6 (tanh-squashed Gaussian). |logp_mean| > 1e3
+# means the policy has gone to absurd pre-activations (the recorded 1e15
+# incident was a finite float that np.isfinite() would not catch).
+LOGP_MEAN_WARN_ABS = 1e3
 
 
 def _guard_metrics(metrics: dict, step: int) -> None:
-    """Hard-abort (exit 3) on any non-finite loss/logp; soft-warn on runaway Q.
+    """Hard-abort (exit 3) on any non-finite loss/logp; soft-warn on runaway Q/logp.
 
     Split out of the training loop so it can be unit-tested directly.
     """
@@ -71,6 +81,14 @@ def _guard_metrics(metrics: dict, step: int) -> None:
             f"WARNING: |q1_mean|={q1:.1f} > {Q1_MEAN_WARN_ABS:.0e} at "
             f"env_step={step} — critics may be blowing up (soft guard: "
             f"continuing, see train.py Q1_MEAN_WARN_ABS).",
+            file=sys.stderr,
+        )
+    logp = float(metrics["logp_mean"])
+    if abs(logp) > LOGP_MEAN_WARN_ABS:
+        print(
+            f"WARNING: |logp_mean|={logp:.1f} > {LOGP_MEAN_WARN_ABS:.0e} at "
+            f"env_step={step} — policy may be blowing up (soft guard: "
+            f"continuing, see train.py LOGP_MEAN_WARN_ABS).",
             file=sys.stderr,
         )
 

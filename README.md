@@ -125,6 +125,11 @@ committed CSVs.
    return improves** (`ci_check.py`) — this proves the code actually learns, not
    just runs.
 
+The seeds fix initialization and sampling order, but multi-threaded torch CPU
+reductions are **not bit-level deterministic**, so re-runs reproduce the
+qualitative result, not identical floats. That is why the learn-gate uses a
+loose improvement floor (Δ ≥ 150), rather than pinning an exact value.
+
 ## Honest limitations
 
 - Single environment (Hopper-v4), **120k steps**, CPU. Not SOTA, not 1M steps.
