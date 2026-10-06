@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           # 3.12+ required: pinned numpy 2.5.2 / scipy 1.18.1 have no cp311 wheels
-        python-version: "3.12"
+          python-version: "3.12"
       - name: System deps for headless MuJoCo
         run: |
           sudo apt-get update
