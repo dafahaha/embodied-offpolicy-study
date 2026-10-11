@@ -8,5 +8,7 @@ numpy==2.5.2
 pandas==3.0.5
 matplotlib==3.11.1
 scipy==1.18.1
-pyyaml
-pytest
+# Test/lint tooling also pinned to the interpreter that produced the committed
+# logs (pip would otherwise float to the latest at CI time; reproducibility).
+pyyaml==6.0.3
+pytest==9.1.1
