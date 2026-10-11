@@ -81,6 +81,39 @@ def test_logprob_analytic_rescale_jacobian():
 
 
 # ---------------------------------------------------------------------------
+# G1b: analytic log_prob at a NON-ZERO mean and non-unit std.
+# The pivotal historical bug (per RESEARCH_RETRO) was centering the Gaussian at
+# zero instead of at the predicted mean: (x)^2 instead of (x-mu)^2. The G1
+# test above evaluates at mu=0, std=1, where (x-mu) and x coincide, so dropping
+# `-mu` leaves every asserted value unchanged (MUT-G survived). Here mu and std
+# are both off the trivial point and several pre_tanh samples are checked
+# against an independent scipy multivariate-normal logpdf plus the tanh and
+# linear-rescale Jacobians. Dropping `-mu` or either Jacobian moves the result
+# by >0.19, far past the tolerance.
+# ---------------------------------------------------------------------------
+def test_logprob_analytic_nonzero_mean_and_std():
+    from scipy import stats as s
+    low = np.array([-2.0, -1.0])
+    high = np.array([2.0, 1.0])
+    actor = SquashedGaussianActor(3, 2, torch.tensor(low), torch.tensor(high), (16, 16))
+    # act_scale = (high-low)/2 = [2.0, 1.0] -> rescale Jacobian = log(2)+log(1)
+    assert actor.act_scale.tolist() == [2.0, 1.0]
+    mu = torch.tensor([[0.2, -0.5]])
+    std = torch.tensor([[0.5, 1.5]])
+    pre_points = torch.tensor([[0.5, 0.3], [0.2, -0.5], [-0.8, 1.2], [1.7, -2.0]])
+    for pre in pre_points:
+        pre_b = pre.unsqueeze(0)
+        logp = actor._logprob(pre_b, mu, std).item()
+        mvn = s.multivariate_normal.logpdf(
+            pre.numpy(), mean=mu[0].numpy(), cov=np.diag(std[0].numpy() ** 2)
+        )
+        tanh_jac = np.sum(np.log(1.0 - np.tanh(pre.numpy()) ** 2 + 1e-6))
+        rescale_jac = np.sum(np.log(actor.act_scale.numpy()))
+        hand = mvn - tanh_jac - rescale_jac
+        assert logp == approx(hand, abs=1e-4)
+
+
+# ---------------------------------------------------------------------------
 # G2: SAC update smoke test — one real update step, losses finite, target moved.
 # ---------------------------------------------------------------------------
 def _toy_sac(seed=0, reward_scale=1.0, zero_init_critic=False):
