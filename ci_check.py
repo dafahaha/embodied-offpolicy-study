@@ -40,13 +40,29 @@ def learn_gate_pass(eval_returns):
     return delta >= LEARN_DELTA, delta, first, tail_mean
 
 
+def run_training_or_fail(cmd):
+    """Run the training subprocess fail-closed.
+
+    `check=True` makes a non-zero child exit raise CalledProcessError; we turn
+    that into a non-zero process exit instead of silently reading a truncated
+    progress.csv. Extracted from main() so the fail-closed contract is unit
+    testable (MUT-E: check=True -> check=False must not slip through).
+    """
+    try:
+        subprocess.run(cmd, check=True, cwd=HERE)
+    except subprocess.CalledProcessError as e:
+        print(f"FAIL: train subprocess exited with code {e.returncode}",
+              file=sys.stderr)
+        sys.exit(e.returncode or 1)
+
+
 def main():
     out = os.path.join(HERE, "logs", "ci_pendulum")
-    subprocess.run([
+    run_training_or_fail([
         sys.executable, "train.py",
         "--config", os.path.join("configs", "pendulum_ci.yaml"),
         "--seed", "0", "--out", out,
-    ], check=True, cwd=HERE)
+    ])
 
     df = pd.read_csv(os.path.join(out, "progress.csv"))
     ev = df[df["phase"] == "eval"].sort_values("env_step")

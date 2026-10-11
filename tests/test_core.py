@@ -1,9 +1,12 @@
+import sys
+
 import numpy as np
 import pandas as pd
 import torch
 import pytest
 from pytest import approx
 
+import ci_check
 from src.replay_buffer import ReplayBuffer
 from src.networks import SquashedGaussianActor, TwinCritic
 from src.sac import SAC
@@ -222,6 +225,25 @@ def test_learn_gate_empty_series_is_clean_fail():
     assert passed is False
     assert delta == 0.0
     assert np.isnan(first) and np.isnan(tail)
+
+
+# ---------------------------------------------------------------------------
+# S2: fail-closed subprocess contract (MUT-E: check=True -> check=False).
+# A child that exits non-zero must abort the wrapper with that non-zero exit
+# code; a healthy child returns without raising. Extracted into
+# ci_check.run_training_or_fail so the PowerShell run_all.ps1 wave loop's
+# contract has a directly unit-tested Python counterpart.
+# ---------------------------------------------------------------------------
+def test_subprocess_failure_propagates_nonzero_exit():
+    bad = [sys.executable, "-c", "import sys; sys.exit(3)"]
+    with pytest.raises(SystemExit) as ei:
+        ci_check.run_training_or_fail(bad)
+    assert ei.value.code == 3
+
+
+def test_subprocess_success_returns_normally():
+    ok = [sys.executable, "-c", "pass"]
+    ci_check.run_training_or_fail(ok)  # no SystemExit raised
 
 
 # ---------------------------------------------------------------------------
