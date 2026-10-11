@@ -2,17 +2,17 @@ import sys
 
 import numpy as np
 import pandas as pd
-import torch
 import pytest
+import torch
 from pytest import approx
 
 import ci_check
-from src.replay_buffer import ReplayBuffer
-from src.networks import SquashedGaussianActor, TwinCritic
-from src.sac import SAC
-from ci_check import learn_gate_pass
-from plot import asymptotic_stats, validate_grid_and_counts, load_runs
 import train as train_mod
+from ci_check import learn_gate_pass
+from plot import asymptotic_stats, load_runs, validate_grid_and_counts
+from src.networks import SquashedGaussianActor, TwinCritic
+from src.replay_buffer import ReplayBuffer
+from src.sac import SAC
 
 
 def test_replay_buffer_shapes_and_circular():
@@ -71,14 +71,15 @@ def test_logprob_analytic_rescale_jacobian():
     mu = torch.zeros(1, 1)
     std = torch.ones(1, 1)
     logp = actor._logprob(pre_tanh, mu, std).item()
-    hand = (-0.5 * np.log(2 * np.pi)            # logN(0 | mu=0, std=1)
-            - np.log(1.0 - np.tanh(0.0) ** 2)    # tanh change of variables
-            - np.log(2.0))                        # linear rescale Jacobian
+    hand = (
+        -0.5 * np.log(2 * np.pi)  # logN(0 | mu=0, std=1)
+        - np.log(1.0 - np.tanh(0.0) ** 2)  # tanh change of variables
+        - np.log(2.0)
+    )  # linear rescale Jacobian
     assert logp == approx(hand, abs=1e-3)
     assert logp == approx(-1.6121, abs=1e-3)
     # unit-bound env (act_scale=1) -> rescale term is exactly 0
-    actor_unit = SquashedGaussianActor(3, 1, torch.tensor([-1.0]),
-                                       torch.tensor([1.0]), (16, 16))
+    actor_unit = SquashedGaussianActor(3, 1, torch.tensor([-1.0]), torch.tensor([1.0]), (16, 16))
     logp_unit = actor_unit._logprob(pre_tanh, mu, std).item()
     assert logp_unit == approx(-0.91894, abs=1e-3)
 
@@ -96,6 +97,7 @@ def test_logprob_analytic_rescale_jacobian():
 # ---------------------------------------------------------------------------
 def test_logprob_analytic_nonzero_mean_and_std():
     from scipy import stats as s
+
     low = np.array([-2.0, -1.0])
     high = np.array([2.0, 1.0])
     actor = SquashedGaussianActor(3, 2, torch.tensor(low), torch.tensor(high), (16, 16))
@@ -121,18 +123,22 @@ def test_logprob_analytic_nonzero_mean_and_std():
 # ---------------------------------------------------------------------------
 def _toy_sac(seed=0, reward_scale=1.0, zero_init_critic=False):
     torch.manual_seed(seed)
-    agent = SAC(obs_dim=3, act_dim=1,
-                act_low=np.array([-1.0]), act_high=np.array([1.0]),
-                hidden_sizes=(16, 16), reward_scale=reward_scale,
-                automatic_entropy_tuning=True)
+    agent = SAC(
+        obs_dim=3,
+        act_dim=1,
+        act_low=np.array([-1.0]),
+        act_high=np.array([1.0]),
+        hidden_sizes=(16, 16),
+        reward_scale=reward_scale,
+        automatic_entropy_tuning=True,
+    )
     if zero_init_critic:
         for p in agent.critic.parameters():
             torch.nn.init.zeros_(p)
         # critic_target is a deep copy of the critic, so it is zero too
     buf = ReplayBuffer(3, 1, capacity=64, device="cpu")
     for i in range(32):
-        buf.add(np.random.randn(3), np.zeros(1), 1.0,
-                np.random.randn(3), i % 2 == 0)
+        buf.add(np.random.randn(3), np.zeros(1), 1.0, np.random.randn(3), i % 2 == 0)
     return agent, buf
 
 
@@ -153,9 +159,14 @@ def test_reward_scale_scales_bellman_target_linear():
     # target collapses to reward_scale * r, so critic_loss = 2*mean(target^2)
     # scales as reward_scale^2 -> 100x smaller when reward_scale=0.1.
     torch.manual_seed(0)
-    agent = SAC(obs_dim=3, act_dim=1,
-                act_low=np.array([-1.0]), act_high=np.array([1.0]),
-                hidden_sizes=(16, 16), reward_scale=0.1)
+    agent = SAC(
+        obs_dim=3,
+        act_dim=1,
+        act_low=np.array([-1.0]),
+        act_high=np.array([1.0]),
+        hidden_sizes=(16, 16),
+        reward_scale=0.1,
+    )
     for p in agent.critic.parameters():
         torch.nn.init.zeros_(p)
     torch.manual_seed(1)
@@ -165,9 +176,14 @@ def test_reward_scale_scales_bellman_target_linear():
     m_small = agent.update(buf.sample(16))
 
     torch.manual_seed(0)
-    agent1 = SAC(obs_dim=3, act_dim=1,
-                 act_low=np.array([-1.0]), act_high=np.array([1.0]),
-                 hidden_sizes=(16, 16), reward_scale=1.0)
+    agent1 = SAC(
+        obs_dim=3,
+        act_dim=1,
+        act_low=np.array([-1.0]),
+        act_high=np.array([1.0]),
+        hidden_sizes=(16, 16),
+        reward_scale=1.0,
+    )
     for p in agent1.critic.parameters():
         torch.nn.init.zeros_(p)
     torch.manual_seed(1)
@@ -177,14 +193,14 @@ def test_reward_scale_scales_bellman_target_linear():
     m_big = agent1.update(buf1.sample(16))
 
     # target = scale * r = 0.1*2.0=0.2 vs 1.0*2.0=2.0; q=0 -> loss = 2*target^2
-    assert m_small["critic_loss"] == approx(2 * 0.2 ** 2, abs=1e-4)
-    assert m_big["critic_loss"] == approx(2 * 2.0 ** 2, abs=1e-4)
+    assert m_small["critic_loss"] == approx(2 * 0.2**2, abs=1e-4)
+    assert m_big["critic_loss"] == approx(2 * 2.0**2, abs=1e-4)
 
 
 def test_plot_stats_match_scipy_on_toy_arrays():
     from scipy import stats as s
-    per_seed = {"A": np.array([100.0, 200.0, 300.0]),
-                "B": np.array([150.0, 250.0, 350.0])}
+
+    per_seed = {"A": np.array([100.0, 200.0, 300.0]), "B": np.array([150.0, 250.0, 350.0])}
     res = asymptotic_stats(per_seed)
     assert res["n"] == 3
     assert res["tcrit"] == approx(s.t.ppf(0.975, df=2))
@@ -201,8 +217,7 @@ def test_plot_stats_match_scipy_on_toy_arrays():
 # ---------------------------------------------------------------------------
 def test_learn_gate_delta_200_passes():
     # first=-1200, mean(last 2)=-1000 -> Δ=+200 >= 150
-    passed, delta, first, tail = learn_gate_pass(
-        [-1200.0, -1100.0, -1000.0, -1000.0])
+    passed, delta, first, tail = learn_gate_pass([-1200.0, -1100.0, -1000.0, -1000.0])
     assert first == approx(-1200.0)
     assert tail == approx(-1000.0)
     assert delta == approx(200.0)
@@ -211,8 +226,7 @@ def test_learn_gate_delta_200_passes():
 
 def test_learn_gate_delta_50_fails():
     # first=-1200, mean(last 2)=-1150 -> Δ=+50 < 150
-    passed, delta, _, _ = learn_gate_pass(
-        [-1200.0, -1180.0, -1150.0, -1150.0])
+    passed, delta, _, _ = learn_gate_pass([-1200.0, -1180.0, -1150.0, -1150.0])
     assert delta == approx(50.0)
     assert passed is False
 
@@ -251,16 +265,14 @@ def test_subprocess_success_returns_normally():
 # a finite-but-huge q1_mean must warn (not abort).
 # ---------------------------------------------------------------------------
 def test_guard_aborts_on_nonfinite_logp():
-    bad = {"critic_loss": 1.0, "actor_loss": 1.0,
-           "q1_mean": 1.0, "logp_mean": float("nan")}
+    bad = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 1.0, "logp_mean": float("nan")}
     with pytest.raises(SystemExit) as ei:
         train_mod._guard_metrics(bad, step=1001)
     assert ei.value.code == 3
 
 
 def test_guard_warns_on_large_q1_but_does_not_abort(capsys):
-    ok = {"critic_loss": 1.0, "actor_loss": 1.0,
-          "q1_mean": 2e4, "logp_mean": -1.0}
+    ok = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 2e4, "logp_mean": -1.0}
     train_mod._guard_metrics(ok, step=1001)  # no SystemExit
     err = capsys.readouterr().err
     assert "WARNING" in err and "q1_mean" in err
@@ -269,8 +281,7 @@ def test_guard_warns_on_large_q1_but_does_not_abort(capsys):
 def test_guard_warns_on_huge_finite_logp_but_does_not_abort(capsys):
     # The recorded incident had log_prob explode to 1e15 — a *finite* float,
     # so np.isfinite() lets it through. It must still trip the soft guard.
-    bad = {"critic_loss": 1.0, "actor_loss": 1.0,
-           "q1_mean": 1.0, "logp_mean": 1e15}
+    bad = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 1.0, "logp_mean": 1e15}
     train_mod._guard_metrics(bad, step=1001)  # no SystemExit
     err = capsys.readouterr().err
     assert "WARNING" in err and "logp_mean" in err
@@ -278,8 +289,7 @@ def test_guard_warns_on_huge_finite_logp_but_does_not_abort(capsys):
 
 def test_guard_silent_on_healthy_logp(capsys):
     # Healthy logp_mean ~ -2..-6 and q1 in the hundreds -> no warning at all.
-    ok = {"critic_loss": 1.0, "actor_loss": 1.0,
-          "q1_mean": 50.0, "logp_mean": -3.5}
+    ok = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 50.0, "logp_mean": -3.5}
     train_mod._guard_metrics(ok, step=1001)
     err = capsys.readouterr().err
     assert "WARNING" not in err
@@ -289,16 +299,13 @@ def test_guard_silent_on_healthy_logp(capsys):
 # T1: plot.py grid/count/non-finite guards as pure functions / synthetic CSV.
 # ---------------------------------------------------------------------------
 def _ev_df(steps):
-    return pd.DataFrame({"env_step": list(steps),
-                         "eval_return": [100.0] * len(steps)})
+    return pd.DataFrame({"env_step": list(steps), "eval_return": [100.0] * len(steps)})
 
 
 def test_validate_grid_aligned_passes():
     runs = {
-        "A": [(0, _ev_df([5000, 10000, 120000])),
-              (1, _ev_df([5000, 10000, 120000]))],
-        "B": [(0, _ev_df([5000, 10000, 120000])),
-              (1, _ev_df([5000, 10000, 120000]))],
+        "A": [(0, _ev_df([5000, 10000, 120000])), (1, _ev_df([5000, 10000, 120000]))],
+        "B": [(0, _ev_df([5000, 10000, 120000])), (1, _ev_df([5000, 10000, 120000]))],
     }
     grid = validate_grid_and_counts(runs)
     assert list(grid) == [5000, 10000, 120000]
@@ -308,10 +315,8 @@ def test_validate_grid_missing_end_point_raises():
     # equal seed counts (2 each) so we reach the grid comparison; one arm's
     # runs were killed before the final eval at 120000.
     runs = {
-        "A": [(0, _ev_df([5000, 10000, 120000])),
-              (1, _ev_df([5000, 10000, 120000]))],
-        "B": [(0, _ev_df([5000, 10000])),
-              (1, _ev_df([5000, 10000]))],
+        "A": [(0, _ev_df([5000, 10000, 120000])), (1, _ev_df([5000, 10000, 120000]))],
+        "B": [(0, _ev_df([5000, 10000])), (1, _ev_df([5000, 10000]))],
     }
     with pytest.raises(SystemExit, match="missing"):
         validate_grid_and_counts(runs)
@@ -329,11 +334,13 @@ def test_validate_grid_unequal_seed_counts_raises():
 def test_load_runs_rejects_nonfinite_eval_return(tmp_path, monkeypatch):
     run = tmp_path / "hopper_baseline_s0"
     run.mkdir()
-    pd.DataFrame({
-        "env_step": [5000, 10000],
-        "phase": ["eval", "eval"],
-        "eval_return": [100.0, float("nan")],
-    }).to_csv(run / "progress.csv", index=False)
+    pd.DataFrame(
+        {
+            "env_step": [5000, 10000],
+            "phase": ["eval", "eval"],
+            "eval_return": [100.0, float("nan")],
+        }
+    ).to_csv(run / "progress.csv", index=False)
     monkeypatch.setattr("plot.LOG_ROOT", str(tmp_path))
     with pytest.raises(ValueError, match="non-finite eval_return"):
         load_runs()

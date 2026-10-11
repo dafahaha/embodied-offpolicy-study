@@ -13,18 +13,20 @@ max) and every arm must have the same number of seeds; otherwise we raise
 loudly instead of letting np.interp silently hold a killed run's last value.
 Non-finite eval_return also aborts rather than poisoning the means/SDs.
 """
+
 from __future__ import annotations
 
 import glob
 import os
 import re
 
+import matplotlib
 import numpy as np
 import pandas as pd
 from scipy import stats
-import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt  # noqa: E402
 
 LOG_ROOT = os.path.join(os.path.dirname(__file__), "logs")
 FIG_DIR = os.path.join(os.path.dirname(__file__), "figures")
@@ -72,9 +74,7 @@ def validate_grid_and_counts(runs: dict):
     """
     counts = {arm: len(rs) for arm, rs in runs.items()}
     if len(set(counts.values())) != 1:
-        raise SystemExit(
-            f"arms have unequal seed counts {counts}; cannot pool / compare"
-        )
+        raise SystemExit(f"arms have unequal seed counts {counts}; cannot pool / compare")
     ref_grid = None
     for arm, rs in runs.items():
         for seed, ev in rs:
@@ -108,13 +108,19 @@ def asymptotic_stats(per_seed: dict) -> dict:
     welch = []
     for i in range(len(arms)):
         for j in range(i + 1, len(arms)):
-            res = stats.ttest_ind(per_seed[arms[i]], per_seed[arms[j]],
-                                  equal_var=False)
-            welch.append((arms[i], arms[j], float(res.statistic),
-                          float(res.pvalue)))
+            res = stats.ttest_ind(per_seed[arms[i]], per_seed[arms[j]], equal_var=False)
+            welch.append((arms[i], arms[j], float(res.statistic), float(res.pvalue)))
     F, p = stats.f_oneway(*[per_seed[a] for a in arms])
-    return {"n": n, "tcrit": float(tcrit), "means": means, "sds": sds,
-            "cis": cis, "welch": welch, "F": float(F), "p": float(p)}
+    return {
+        "n": n,
+        "tcrit": float(tcrit),
+        "means": means,
+        "sds": sds,
+        "cis": cis,
+        "welch": welch,
+        "F": float(F),
+        "p": float(p),
+    }
 
 
 def main():
@@ -126,12 +132,16 @@ def main():
     grid = validate_grid_and_counts(runs)
     all_max = int(grid.max())
 
-    colors = {"Baseline (reward_scale=1.0)": "#1f77b4",
-              "RewardScaled (reward_scale=0.1)": "#d62728",
-              "FixedAlpha (auto_tune=off)": "#2ca02c"}
-    short = {"Baseline (reward_scale=1.0)": "Baseline",
-             "RewardScaled (reward_scale=0.1)": "RewardScaled",
-             "FixedAlpha (auto_tune=off)": "FixedAlpha"}
+    colors = {
+        "Baseline (reward_scale=1.0)": "#1f77b4",
+        "RewardScaled (reward_scale=0.1)": "#d62728",
+        "FixedAlpha (auto_tune=off)": "#2ca02c",
+    }
+    short = {
+        "Baseline (reward_scale=1.0)": "Baseline",
+        "RewardScaled (reward_scale=0.1)": "RewardScaled",
+        "FixedAlpha (auto_tune=off)": "FixedAlpha",
+    }
 
     # ---- Learning curves: mean line +- 1 SD across seeds ----
     plt.figure(figsize=(7, 4.5))
@@ -149,7 +159,7 @@ def main():
         mean = arr.mean(axis=0)
         sd = arr.std(axis=0, ddof=1)
         c = colors.get(arm, "#333333")
-        plt.plot(grid, mean, color=c, label=f"{short.get(arm,arm)} (n={arr.shape[0]})")
+        plt.plot(grid, mean, color=c, label=f"{short.get(arm, arm)} (n={arr.shape[0]})")
         plt.fill_between(grid, mean - sd, mean + sd, color=c, alpha=0.2)
 
         tail = arr[:, -TAIL_EVAL_POINTS:]
@@ -159,8 +169,9 @@ def main():
 
     plt.xlabel("environment steps")
     plt.ylabel("deterministic eval return (5 episodes)")
-    plt.title(f"SAC on Hopper-v4 (CPU, {all_max//1000}k steps/run); "
-              f"shade = +/- 1 SD across seeds")
+    plt.title(
+        f"SAC on Hopper-v4 (CPU, {all_max//1000}k steps/run); " f"shade = +/- 1 SD across seeds"
+    )
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -176,16 +187,27 @@ def main():
 
     plt.figure(figsize=(6.5, 4.5))
     x = np.arange(len(arms))
-    plt.bar(x, [stats_res["means"][a] for a in arms],
-            yerr=[stats_res["cis"][a] for a in arms],
-            color=[colors.get(a, "#333") for a in arms],
-            capsize=8, alpha=0.55)
+    plt.bar(
+        x,
+        [stats_res["means"][a] for a in arms],
+        yerr=[stats_res["cis"][a] for a in arms],
+        color=[colors.get(a, "#333") for a in arms],
+        capsize=8,
+        alpha=0.55,
+    )
     # overlay raw seed points, jittered
     rng = np.random.default_rng(0)
     for i, a in enumerate(arms):
         jitter = rng.uniform(-0.08, 0.08, size=len(per_seed[a]))
-        plt.scatter(x[i] + jitter, per_seed[a], color=colors.get(a, "#333"),
-                    zorder=3, s=28, edgecolor="black", linewidth=0.5)
+        plt.scatter(
+            x[i] + jitter,
+            per_seed[a],
+            color=colors.get(a, "#333"),
+            zorder=3,
+            s=28,
+            edgecolor="black",
+            linewidth=0.5,
+        )
     plt.xticks(x, [short.get(a, a) for a in arms])
     plt.ylabel("asymptotic eval return (last 4 eval points)")
     plt.title(f"mean + t-based 95% CI (df={n-1}); dots = individual seeds")
@@ -198,13 +220,15 @@ def main():
     print(f"\n=== Asymptotic (last {TAIL_EVAL_POINTS} eval points, i.e. 105k-120k) ===")
     for a in arms:
         v = summary[a]
-        print(f"{short.get(a,a):14s} mean={v.mean():8.1f}  SD={v.std(ddof=1):7.1f}  "
-              f"t95%CI=+/-{tcrit*v.std(ddof=1)/np.sqrt(n):6.1f}  seeds={list(np.round(v).astype(int))}")
+        print(
+            f"{short.get(a, a):14s} mean={v.mean():8.1f}  SD={v.std(ddof=1):7.1f}  "
+            f"t95%CI=+/-{tcrit * v.std(ddof=1) / np.sqrt(n):6.1f}  "
+            f"seeds={list(np.round(v).astype(int))}"
+        )
 
     print("\n=== Pairwise Welch t-test (scipy, equal_var=False) ===")
     for a_i, a_j, t, p in stats_res["welch"]:
-        print(f"{short.get(a_i,a_i)} vs {short.get(a_j,a_j)}: "
-              f"t={t:+.2f}  p={p:.3f}")
+        print(f"{short.get(a_i, a_i)} vs {short.get(a_j, a_j)}: " f"t={t:+.2f}  p={p:.3f}")
 
     print(f"\nOne-way ANOVA (scipy.f_oneway): F={stats_res['F']:.2f}  p={stats_res['p']:.3f}")
 

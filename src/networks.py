@@ -1,9 +1,9 @@
 """Actor-Critic networks for SAC, written from scratch in PyTorch."""
+
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 LOG_STD_MIN = -20.0
 LOG_STD_MAX = 2.0
@@ -25,8 +25,14 @@ class SquashedGaussianActor(nn.Module):
     correction, so it is the density w.r.t. env actions.
     """
 
-    def __init__(self, obs_dim: int, act_dim: int, act_low: torch.Tensor,
-                 act_high: torch.Tensor, hidden_sizes=(256, 256)):
+    def __init__(
+        self,
+        obs_dim: int,
+        act_dim: int,
+        act_low: torch.Tensor,
+        act_high: torch.Tensor,
+        hidden_sizes=(256, 256),
+    ):
         super().__init__()
         self.net = mlp([obs_dim, *hidden_sizes], out_activation=nn.ReLU)
         self.mu_layer = nn.Linear(hidden_sizes[-1], act_dim)
@@ -67,9 +73,7 @@ class SquashedGaussianActor(nn.Module):
         )
         logp = gauss.sum(dim=-1, keepdim=True)
         # Tanh change-of-variables: log(1 - tanh(x)^2), with epsilon for stability.
-        logp -= torch.sum(
-            torch.log(1.0 - torch.tanh(pre_tanh) ** 2 + 1e-6), dim=-1, keepdim=True
-        )
+        logp -= torch.sum(torch.log(1.0 - torch.tanh(pre_tanh) ** 2 + 1e-6), dim=-1, keepdim=True)
         # Linear action-rescale Jacobian: a = scale*tanh(u)+bias, so dP/da =
         # dP/du / |scale|. For unit-bound envs (scale=1) this term is exactly 0.
         logp -= torch.sum(torch.log(self.act_scale), dim=-1, keepdim=True)

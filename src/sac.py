@@ -4,15 +4,16 @@ Reference objective: Haarnoja et al. 2018, "Soft Actor-Critic: Off-Policy
 Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor".
 We use twin critics, soft target updates, and automatic entropy temperature.
 """
+
 from __future__ import annotations
 
 import copy
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 
 from .networks import SquashedGaussianActor, TwinCritic
-from .replay_buffer import ReplayBuffer
 
 
 class SAC:
@@ -54,8 +55,7 @@ class SAC:
         self.automatic_entropy_tuning = automatic_entropy_tuning
         if automatic_entropy_tuning:
             self.target_entropy = -float(act_dim)
-            self.log_alpha = torch.tensor(np.log(alpha), requires_grad=True,
-                                           device=self.device)
+            self.log_alpha = torch.tensor(np.log(alpha), requires_grad=True, device=self.device)
             self.alpha_opt = torch.optim.Adam([self.log_alpha], lr=lr)
         else:
             self.log_alpha = torch.tensor(np.log(alpha), device=self.device)

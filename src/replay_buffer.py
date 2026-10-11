@@ -2,6 +2,7 @@
 
 Kept deliberately simple and tested so the SAC loop has no hidden magic.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -37,7 +38,10 @@ class ReplayBuffer:
 
     def sample(self, batch_size: int):
         idx = np.random.randint(0, self.size, size=batch_size)
-        to_t = lambda x: torch.as_tensor(x, dtype=torch.float32, device=self.device)
+
+        def to_t(x):
+            return torch.as_tensor(x, dtype=torch.float32, device=self.device)
+
         return (
             to_t(self.obs[idx]),
             to_t(self.actions[idx]),

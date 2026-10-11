@@ -6,6 +6,7 @@ Usage:
 
 Logs a per-episode + per-eval CSV at <out>/progress.csv.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -18,9 +19,9 @@ import gymnasium as gym
 import numpy as np
 import torch
 
-from src.sac import SAC
 from src.replay_buffer import ReplayBuffer
-from src.utils import set_seed, load_config
+from src.sac import SAC
+from src.utils import load_config, set_seed
 
 
 def evaluate(agent: SAC, env_id: str, seed: int, episodes: int = 5) -> float:
@@ -114,8 +115,10 @@ def main():
     act_high = env.action_space.high
 
     agent = SAC(
-        obs_dim=obs_dim, act_dim=act_dim,
-        act_low=act_low, act_high=act_high,
+        obs_dim=obs_dim,
+        act_dim=act_dim,
+        act_low=act_low,
+        act_high=act_high,
         device=args.device,
         hidden_sizes=tuple(cfg.get("hidden_sizes", [256, 256])),
         gamma=cfg.get("gamma", 0.99),
@@ -134,8 +137,17 @@ def main():
     eval_episodes = int(cfg.get("eval_episodes", 5))
 
     csv_path = os.path.join(args.out, "progress.csv")
-    fields = ["env_step", "episode", "phase", "episode_return", "episode_length",
-              "eval_return", "time_sec", "alpha", "q1_mean"]
+    fields = [
+        "env_step",
+        "episode",
+        "phase",
+        "episode_return",
+        "episode_length",
+        "eval_return",
+        "time_sec",
+        "alpha",
+        "q1_mean",
+    ]
     csv_file = open(csv_path, "w", newline="", encoding="utf-8")
     writer = csv.DictWriter(csv_file, fieldnames=fields)
     writer.writeheader()
@@ -168,32 +180,46 @@ def main():
 
         if terminated or truncated:
             ep += 1
-            writer.writerow({
-                "env_step": step, "episode": ep, "phase": "train",
-                "episode_return": ep_ret, "episode_length": ep_len,
-                "eval_return": "", "time_sec": round(time.time() - t0, 2),
-                "alpha": round(last_metrics.get("alpha", float("nan")), 4),
-                "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
-            })
+            writer.writerow(
+                {
+                    "env_step": step,
+                    "episode": ep,
+                    "phase": "train",
+                    "episode_return": ep_ret,
+                    "episode_length": ep_len,
+                    "eval_return": "",
+                    "time_sec": round(time.time() - t0, 2),
+                    "alpha": round(last_metrics.get("alpha", float("nan")), 4),
+                    "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
+                }
+            )
             csv_file.flush()
             obs, _ = env.reset()
             ep_ret, ep_len = 0.0, 0
 
         if step >= next_eval_at:
             ev = evaluate(agent, cfg["env_id"], args.seed, eval_episodes)
-            writer.writerow({
-                "env_step": step, "episode": ep, "phase": "eval",
-                "episode_return": "", "episode_length": "",
-                "eval_return": round(ev, 2),
-                "time_sec": round(time.time() - t0, 2),
-                "alpha": round(last_metrics.get("alpha", float("nan")), 4),
-                "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
-            })
+            writer.writerow(
+                {
+                    "env_step": step,
+                    "episode": ep,
+                    "phase": "eval",
+                    "episode_return": "",
+                    "episode_length": "",
+                    "eval_return": round(ev, 2),
+                    "time_sec": round(time.time() - t0, 2),
+                    "alpha": round(last_metrics.get("alpha", float("nan")), 4),
+                    "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
+                }
+            )
             csv_file.flush()
             next_eval_at += eval_every
             if step % (eval_every * 4) == 0:
-                print(f"[{args.out}] step={step}/{total_steps} eval={ev:.1f} "
-                      f"t={time.time()-t0:.0f}s", flush=True)
+                print(
+                    f"[{args.out}] step={step}/{total_steps} eval={ev:.1f} "
+                    f"t={time.time()-t0:.0f}s",
+                    flush=True,
+                )
 
     csv_file.close()
     env.close()

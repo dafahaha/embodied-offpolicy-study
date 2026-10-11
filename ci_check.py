@@ -4,6 +4,7 @@ learns end-to-end (not just that the code runs).
 
 Exits non-zero if learning is absent.
 """
+
 import os
 import subprocess
 import sys
@@ -51,30 +52,41 @@ def run_training_or_fail(cmd):
     try:
         subprocess.run(cmd, check=True, cwd=HERE)
     except subprocess.CalledProcessError as e:
-        print(f"FAIL: train subprocess exited with code {e.returncode}",
-              file=sys.stderr)
+        print(f"FAIL: train subprocess exited with code {e.returncode}", file=sys.stderr)
         sys.exit(e.returncode or 1)
 
 
 def main():
     out = os.path.join(HERE, "logs", "ci_pendulum")
-    run_training_or_fail([
-        sys.executable, "train.py",
-        "--config", os.path.join("configs", "pendulum_ci.yaml"),
-        "--seed", "0", "--out", out,
-    ])
+    run_training_or_fail(
+        [
+            sys.executable,
+            "train.py",
+            "--config",
+            os.path.join("configs", "pendulum_ci.yaml"),
+            "--seed",
+            "0",
+            "--out",
+            out,
+        ]
+    )
 
     df = pd.read_csv(os.path.join(out, "progress.csv"))
     ev = df[df["phase"] == "eval"].sort_values("env_step")
     passed, delta, first, tail_mean = learn_gate_pass(ev["eval_return"].values)
     if np.isnan(first):
-        print("FAIL: no eval points recorded — train.py must have crashed "
-              "before the first eval", file=sys.stderr)
+        print(
+            "FAIL: no eval points recorded — train.py must have crashed " "before the first eval",
+            file=sys.stderr,
+        )
         sys.exit(1)
     print(f"CI Pendulum eval: first={first:.1f} mean(last 2)={tail_mean:.1f} Δ={delta:+.1f}")
     if not passed:
-        print(f"FAIL: reward did not improve enough (Δ={delta:+.1f} < {LEARN_DELTA:.0f}); "
-              f"code likely broken", file=sys.stderr)
+        print(
+            f"FAIL: reward did not improve enough (Δ={delta:+.1f} < {LEARN_DELTA:.0f}); "
+            f"code likely broken",
+            file=sys.stderr,
+        )
         sys.exit(1)
     print("PASS: SAC learned on Pendulum")
 

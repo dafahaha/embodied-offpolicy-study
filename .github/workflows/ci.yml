@@ -21,6 +21,12 @@ jobs:
           sudo apt-get install -y libgl1 libglib2.0-0
       - name: Install python deps
         run: pip install -r requirements.txt
+      - name: Lint gates (black / isort / flake8)
+        run: |
+          pip install black isort flake8
+          black --check --line-length=100 src train.py plot.py ci_check.py conftest.py tests
+          isort --check-only --line-length=100 --profile black src train.py plot.py ci_check.py conftest.py tests
+          flake8 --max-line-length=100 --extend-ignore=E203,W503 src train.py plot.py ci_check.py conftest.py tests
       - name: Lint (byte-compile)
         run: python -m compileall src train.py plot.py ci_check.py
       - name: Unit tests
