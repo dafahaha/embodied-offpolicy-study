@@ -1,0 +1,141 @@
+{
+  "caliber": {
+    "env": "Hopper-v4",
+    "steps_per_run": 120000,
+    "seeds_per_arm": 3,
+    "asymptotic_window": "last 4 eval points (105k-120k)",
+    "sd_ddof": 1,
+    "tcrit_975_df2": 4.3027,
+    "note": "t-based 95% CI; n=3, intervals are wide and overlap."
+  },
+  "arms": {
+    "baseline": {
+      "label": "Baseline (reward_scale=1.0, auto alpha)",
+      "per_seed_tail_means": [
+        547.41,
+        1873.15,
+        833.13
+      ],
+      "mean": 1084.6,
+      "sd": 697.7,
+      "ci95_halfwidth": 1733.2,
+      "ci95_low": -648.7,
+      "ci95_high": 2817.8
+    },
+    "rewardscale": {
+      "label": "RewardScaled (reward_scale=0.1, auto alpha)",
+      "per_seed_tail_means": [
+        644.64,
+        886.07,
+        1823.75
+      ],
+      "mean": 1118.2,
+      "sd": 622.9,
+      "ci95_halfwidth": 1547.3,
+      "ci95_low": -429.2,
+      "ci95_high": 2665.5
+    },
+    "fixedalpha": {
+      "label": "FixedAlpha (reward_scale=0.1, alpha=0.2 frozen)",
+      "per_seed_tail_means": [
+        2133.06,
+        1038.65,
+        1039.22
+      ],
+      "mean": 1403.6,
+      "sd": 631.7,
+      "ci95_halfwidth": 1569.2,
+      "ci95_low": -165.6,
+      "ci95_high": 2972.8
+    }
+  },
+  "pairwise_welch": {
+    "baseline_vs_rewardscale": {
+      "t": -0.06220434390803697,
+      "p": 0.9534205280123574,
+      "welch_df": 3.9495830237345575,
+      "mean_diff": -33.590000000000146,
+      "se_diff": 539.9944423440857,
+      "ci95_low": -1540.4329469563577,
+      "ci95_high": 1473.2529469563574
+    },
+    "baseline_vs_fixedalpha": {
+      "t": -0.5871904506699075,
+      "p": 0.5889126338273156,
+      "welch_df": 3.9611077004806767,
+      "mean_diff": -319.0775000000001,
+      "se_diff": 543.3969500627512,
+      "ci95_low": -1833.6493876603904,
+      "ci95_high": 1195.4943876603902
+    },
+    "fixedalpha_vs_rewardscale": {
+      "t": 0.5573896391526325,
+      "p": 0.6069842269784632,
+      "welch_df": 3.9992103576632236,
+      "mean_diff": 285.48749999999995,
+      "se_diff": 512.1865925495318,
+      "ci95_low": -1136.6812005850584,
+      "ci95_high": 1707.6562005850583
+    }
+  },
+  "anova": {
+    "F": 0.217,
+    "p": 0.8108
+  },
+  "primary_contrast_baseline_vs_rewardscale": {
+    "t": -0.06220434390803697,
+    "p": 0.9534205280123574,
+    "welch_df": 3.9495830237345575,
+    "mean_diff": -33.590000000000146,
+    "se_diff": 539.9944423440857,
+    "ci95_low": -1540.4329469563577,
+    "ci95_high": 1473.2529469563574,
+    "cohens_d": -0.0507896341197646,
+    "hedges_g": -0.040631707295811684,
+    "pooled_sd": 661.3554238408801
+  },
+  "training_dynamics_final_step": {
+    "baseline": {
+      "final_alpha_per_seed": [
+        0.0661,
+        0.106,
+        0.0678
+      ],
+      "final_alpha_mean": 0.08,
+      "final_q1_mean_per_seed": [
+        139.5,
+        201.2,
+        170.7
+      ],
+      "final_q1_mean_mean": 170.5
+    },
+    "fixedalpha": {
+      "final_alpha_per_seed": [
+        0.2,
+        0.2,
+        0.2
+      ],
+      "final_alpha_mean": 0.2,
+      "final_q1_mean_per_seed": [
+        38.1,
+        33.9,
+        35.6
+      ],
+      "final_q1_mean_mean": 35.9
+    },
+    "rewardscale": {
+      "final_alpha_per_seed": [
+        0.0037,
+        0.0066,
+        0.0063
+      ],
+      "final_alpha_mean": 0.0055,
+      "final_q1_mean_per_seed": [
+        15.4,
+        19.1,
+        23.4
+      ],
+      "final_q1_mean_mean": 19.3
+    }
+  }
+}

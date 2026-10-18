@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methodology &amp; honest reporting · Daizhi Liao</title>
+<meta name="description" content="Exploratory vs confirmatory distinction, statistical caliber, pre-registered vs post-hoc claims, and data/code availability for the two notes on this site.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <a class="brand" href="index.html">Daizhi Liao<small>RL &amp; Embodied AI · research notes</small></a>
+  <nav>
+    <div class="group">Notes</div>
+    <a href="index.html">Home</a>
+    <a href="sac-reward-scaling.html">SAC reward scaling (null)</a>
+    <a href="deploy-bench.html">rl-deploy-bench pitfalls</a>
+    <a href="methodology.html" class="active">Methodology &amp; honesty</a>
+    <div class="group">On this page</div>
+    <a href="#why" class="sub">Why this page exists</a>
+    <a href="#exploratory" class="sub">Exploratory vs confirmatory</a>
+    <a href="#caliber" class="sub">Statistical caliber</a>
+    <a href="#prepost" class="sub">Pre-registered vs post-hoc</a>
+    <a href="#availability" class="sub">Data &amp; code availability</a>
+    <a href="#limits" class="sub">Reproducibility limits</a>
+    <a href="#about" class="sub">About the author</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+<header>
+  <h1>Methodology &amp; honest reporting</h1>
+  <p class="subtitle">What was planned in advance, what was discovered afterwards, and how every number on this site was produced</p>
+</header>
+
+<h2 id="why" class="toc-anchor">1 · Why this page exists</h2>
+<p>
+  Both artifacts on this site are <strong>exploratory self-directed projects</strong> built for PhD
+  application evidence, not published papers. The purpose of this page is to separate what was
+  committed to before seeing data from what emerged afterwards, to state the exact statistical
+  caliber, and to list where every raw datum and script lives — so a reviewer can audit rather than
+  take claims on faith.
+</p>
+
+<h2 id="exploratory" class="toc-anchor">2 · Exploratory phase vs confirmatory phase</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>Confirmatory (pre-registered)</h3>
+    <ul>
+      <li>Hypothesis written 2026-10-01 in <code>PRE_REGISTRATION.md</code> before any Hopper result was inspected.</li>
+      <li>Primary contrast: Baseline vs RewardScaled on asymptotic deterministic eval return.</li>
+      <li>Budget, seeds, eval protocol, and endpoint defined up front.</li>
+      <li>Result: <strong>null</strong> — p = 0.953; reported as-is.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Exploratory (post-hoc, uncorrected)</h3>
+    <ul>
+      <li>FixedAlpha control arm added after the first 60k pass to separate reward scaling from the auto-tuned α.</li>
+      <li>Pairwise Welch tests against FixedAlpha and the one-way ANOVA are descriptive only.</li>
+      <li>rl-deploy-bench pitfall catalog is engineering observation, not a controlled experiment.</li>
+      <li>No effect here is claimed as confirmed; all are labeled exploratory.</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="caliber" class="toc-anchor">3 · Statistical caliber (Study 1)</h2>
+<table>
+  <thead><tr><th>Item</th><th>Caliber used</th></tr></thead>
+  <tbody>
+    <tr><td>Unit of analysis</td><td>One per-seed tail mean per run; n = 3 seeds per arm (not individual eval episodes).</td></tr>
+    <tr><td>Asymptotic window</td><td>Last 4 deterministic eval points (105k–120k steps), mean per seed.</td></tr>
+    <tr><td>Dispersion</td><td>Sample SD, ddof = 1; t-based 95% CI with df = n−1 = 2 (t<sub>0.975,2</sub> = 4.303).</td></tr>
+    <tr><td>Pairwise test</td><td>Welch t-test (<code>scipy.stats.ttest_ind(equal_var=False)</code>); mean-difference CI on Welch-Satterthwaite df.</td></tr>
+    <tr><td>Omnibus</td><td>One-way ANOVA (<code>scipy.stats.f_oneway</code>), uncorrected.</td></tr>
+    <tr><td>Effect size</td><td>Cohen's d and Hedges' g for the primary contrast; reported descriptively only at n = 3.</td></tr>
+    <tr><td>Power</td><td><strong>No power analysis was run.</strong> n = 3 with this seed variance has essentially no power; "p &gt; 0.05" means not detectable, not "no effect".</td></tr>
+    <tr><td>Multiple comparisons</td><td>Post-hoc pairwise tests are not corrected (no Bonferroni/Holm); they are descriptive.</td></tr>
+  </tbody>
+</table>
+<p class="src">
+  Recomputation: <code>docs/assets/recompute_stats.py</code> reads the committed raw CSVs directly and
+  writes <code>docs/assets/results.json</code>; independent of <code>plot.py</code>. Numbers on the
+  study page match both the README summary and this independent pass.
+</p>
+
+<h2 id="prepost" class="toc-anchor">4 · Pre-registered vs post-hoc claims</h2>
+<table>
+  <thead><tr><th>Claim / analysis</th><th>Status</th><th>Evidence source</th></tr></thead>
+  <tbody>
+    <tr><td>RewardScaled ≥ Baseline on asymptotic return</td><td><span class="pill null">Pre-registered</span></td><td><code>PRE_REGISTRATION.md</code>; tested Baseline vs RewardScaled, p = 0.953</td></tr>
+    <tr><td>Protocol: 120k steps, 3 seeds, 5 eval episodes/5k steps, last-4 window</td><td><span class="pill null">Pre-registered</span></td><td><code>PRE_REGISTRATION.md</code>, <code>configs/*.yaml</code></td></tr>
+    <tr><td>FixedAlpha arm (α = 0.2 frozen, scale 0.1)</td><td><span class="pill explore">Post-hoc control</span></td><td>Added after 60k pass; <code>configs/sac_hopper_fixedalpha.yaml</code></td></tr>
+    <tr><td>Baseline vs FixedAlpha, FixedAlpha vs RewardScaled Welch tests</td><td><span class="pill explore">Post-hoc, uncorrected</span></td><td><code>docs/assets/results.json</code></td></tr>
+    <tr><td>One-way ANOVA F = 0.22, p = 0.811</td><td><span class="pill explore">Post-hoc, descriptive</span></td><td><code>scipy.f_oneway</code> over the three tail-mean vectors</td></tr>
+    <tr><td>Apparent ~3× win at the 60k pass being overturned</td><td><span class="pill explore">Narrative, old CSVs not committed</span></td><td><code>RESEARCH_RETRO.md</code>; not recomputed here</td></tr>
+    <tr><td>Training dynamics (final α, final Q<sub>1</sub> per seed)</td><td><span class="pill explore">Descriptive</span></td><td>Last train row of each committed CSV; <code>recompute_stats.py</code></td></tr>
+    <tr><td>rl-deploy-bench pitfall taxonomy</td><td><span class="pill tool">Engineering observation</span></td><td>Committed fix commits, <code>CHANGELOG.md</code>, regression tests</td></tr>
+  </tbody>
+</table>
+
+<h2 id="availability" class="toc-anchor">5 · Data &amp; code availability</h2>
+<ul>
+  <li><strong>Raw data (Study 1):</strong> per-run CSVs committed at <code>logs/hopper_{baseline,rewardscale,fixedalpha}_s{0,1,2}/progress.csv</code>; every train row (α, Q<sub>1</sub>, return) and every eval point (deterministic return) is present.</li>
+  <li><strong>Reproduction code (Study 1):</strong> <code>train.py</code>, <code>src/</code> SAC implementation, <code>plot.py</code>; independent statistics <code>docs/assets/recompute_stats.py</code>; machine-readable results <code>docs/assets/results.json</code>.</li>
+  <li><strong>Tests (Study 1):</strong> <code>tests/test_core.py</code>; CI learn gate <code>ci_check.py</code>; configs under <code>configs/</code>.</li>
+  <li><strong>Study 2:</strong> full source under <code>src/rl_deploy_bench/</code>, regression suite <code>tests/test_core.py</code>, <code>CHANGELOG.md</code> (v1.1.0), <code>API.md</code>, CI matrix in <code>.github/workflows/ci.yml</code>.</li>
+  <li><strong>No cherry-picking:</strong> all three seeds per arm are committed, including the low ones; no run was dropped for being inconvenient.</li>
+</ul>
+
+<h2 id="limits" class="toc-anchor">6 · Reproducibility limits, stated plainly</h2>
+<ul>
+  <li>Single environment (Hopper-v4), 120k steps, CPU only; findings do not generalize to other envs or 1M-step budgets.</li>
+  <li>n = 3; confidence intervals are wide and overlap; the study can only detect very large effects.</li>
+  <li>Environment pin: the pre-registration named gymnasium 1.3.0 / mujoco 3.14.0; committed logs were produced on gymnasium 1.4.0 / mujoco 3.15.0. The discrepancy is logged in the README, not retro-edited into the pre-registration; Hopper-v4 reward semantics are unchanged across these minor bumps.</li>
+  <li>Multi-threaded CPU torch reductions are not bit-deterministic; re-runs reproduce the qualitative result, not identical floats, which is why CI uses a loose learn gate rather than exact match.</li>
+  <li>rl-deploy-bench was exercised on CPU; TensorRT and Jetson/edge paths are reviewed code, not measured on device. No speedup number on this site comes from a device benchmark that was never run.</li>
+</ul>
+
+<h2 id="about" class="toc-anchor">7 · About the author</h2>
+<div class="card">
+  <p><strong>Daizhi Liao</strong> (GitHub: <a href="https://github.com/dafahaha" target="_blank" rel="noopener">dafahaha</a>) — Network Engineering, Guangzhou University; interests in reinforcement learning, off-policy stability, embodied AI, and empirical auditing of deployed systems.</p>
+  <p>
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study" target="_blank" rel="noopener">embodied-offpolicy-study</a> ·
+    <a href="https://github.com/dafahaha/rl-deploy-bench" target="_blank" rel="noopener">rl-deploy-bench</a> ·
+    <a href="https://github.com/dafahaha/transit-truth" target="_blank" rel="noopener">TransitTruth</a>
+    (<a href="https://dafahaha.github.io/transit-truth/" target="_blank" rel="noopener">live demo</a>) ·
+    <a href="https://dafahaha.github.io/" target="_blank" rel="noopener">personal site</a>
+  </p>
+</div>
+
+<footer>
+  <span><a href="index.html">Back to home</a></span>
+  <span>Prepared for PhD application review · all numbers traceable to committed artifacts</span>
+</footer>
+
+</main>
+</div>
+</body>
+</html>

@@ -13,6 +13,10 @@ real research ability for a PhD (Embodied AI / RL) application.
 - **Hardware honesty**: all runs are **CPU only**, **120k env steps per run**
   (restored to the pre-registered budget). This is *not* a 1M-step benchmark;
   numbers are reported as measured.
+- **Static notes site**: an academic-style write-up of this null result and the
+  companion deployment-toolkit pitfall taxonomy lives under [`docs/`](docs/)
+  (zero-build HTML; open `docs/index.html`, or serve `docs/` with any static
+  file server).
 
 ## Layout
 

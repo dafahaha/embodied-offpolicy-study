@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rl-deploy-bench: a tested cross-deployment pitfall taxonomy · Daizhi Liao</title>
+<meta name="description" content="Pitfall taxonomy from rl-deploy-bench v1.1.0: calibration dry episodes, action-bounds affine mismatch, static-quantization rank errors, swallowed FP16 exceptions, monitor leaks, report injection — each with phenomenon, minimal trigger, detection, fix, and the regression test that locks it.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <a class="brand" href="index.html">Daizhi Liao<small>RL &amp; Embodied AI · research notes</small></a>
+  <nav>
+    <div class="group">Notes</div>
+    <a href="index.html">Home</a>
+    <a href="sac-reward-scaling.html">SAC reward scaling (null)</a>
+    <a href="deploy-bench.html" class="active">rl-deploy-bench pitfalls</a>
+    <a href="methodology.html">Methodology &amp; honesty</a>
+    <div class="group">On this page</div>
+    <a href="#what" class="sub">What the toolkit is</a>
+    <a href="#calibration" class="sub">A · Calibration data</a>
+    <a href="#export" class="sub">B · Export action semantics</a>
+    <a href="#quant" class="sub">C · Quantization mechanics</a>
+    <a href="#latency" class="sub">D · Latency hygiene</a>
+    <a href="#report" class="sub">E · Reporting &amp; robustness</a>
+    <a href="#repro" class="sub">Reproduction</a>
+    <div class="group">Code</div>
+    <a href="https://github.com/dafahaha/rl-deploy-bench" target="_blank" rel="noopener">Repository</a>
+    <a href="https://github.com/dafahaha/rl-deploy-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+    <a href="https://github.com/dafahaha/rl-deploy-bench/blob/main/API.md" target="_blank" rel="noopener">API docs</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+<header>
+  <h1>rl-deploy-bench: a tested cross-deployment pitfall taxonomy</h1>
+  <p class="subtitle">Config-driven CLI / Python API · ONNX, TorchScript, FP16, INT8 · latency P50–P99 + RL action accuracy · v1.1.0</p>
+  <p class="meta">Repository: <a href="https://github.com/dafahaha/rl-deploy-bench" target="_blank" rel="noopener">dafahaha/rl-deploy-bench</a> · every fix below is locked by a regression test in <code>tests/test_core.py</code> unless noted</p>
+</header>
+
+<section id="what" class="toc-anchor">
+<h2>What the toolkit is — and what it is not</h2>
+<p>
+  rl-deploy-bench exports policies to ONNX/TorchScript, converts to FP16/INT8, and benchmarks
+  latency (P50/P90/P95/P99), throughput, and RL-specific action accuracy (MSE + cosine similarity
+  vs the FP32 reference), emitting Markdown or HTML reports. This page does <strong>not</strong>
+  advertise measured speedups: the toolkit was developed and tested on CPU; Jetson/edge is a target
+  deployment path, not a device that has been measured here. The value documented below is the
+  catalog of deployment failure modes that were actually hit, reproduced minimally, detected, fixed,
+  and regression-tested. Each card follows the same four-part structure: <em>phenomenon → minimal
+  trigger → detection → fix/avoidance</em>.
+</p>
+</section>
+
+<h2 id="calibration" class="toc-anchor">A · Calibration data collection</h2>
+
+<div class="pitfall">
+  <h3>A1 · Intermittent / consecutive dry episodes hang the calibrator</h3>
+  <div class="row"><b>Phenomenon</b><div>An <code>observation_filter</code> rejects every transition in an episode (e.g. an out-of-range or NaN filter). With <code>num_episodes=None</code> the collection loop waits for a fixed sample count and never receives one — an apparent hang. A single dry episode is benign; a run of them means the filter or env is broken.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Scripted fake env that always returns transitions the filter rejects; run <code>collect_calibration_data</code> without an episode cap.</div></div>
+  <div class="row"><b>Detection</b><div>Counter of consecutive dry episodes; raise only on the <strong>3rd consecutive</strong> dry episode; any productive episode resets the counter to zero. A bounded <code>num_episodes</code> path finishes without raising.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Fail-closed guard in <code>benchmark/calibration.py</code>; filter exceptions propagate instead of being swallowed; <code>np.load(..., allow_pickle=False)</code> for saved datasets. Tests: <code>TestCalibrationData::test_calibration_rejecting_filter_raises_instead_of_looping</code>, <code>test_calibration_intermittent_dry_episode_does_not_raise_with_num_episodes_none</code>, <code>test_calibration_guard_raises_exactly_on_third_consecutive_dry_episode</code>, <code>test_calibration_productive_episode_resets_consecutive_dry_counter</code>, <code>test_calibration_filter_exception_propagates</code>, <code>test_calibration_load_rejects_object_arrays</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>A2 · Calibration distribution drift: random noise ≠ deployment observations</h3>
+  <div class="row"><b>Phenomenon</b><div>Static INT8 needs activation-range statistics. Calibrating on i.i.d. Gaussian noise when the deployed observation distribution is concentrated (or bounded) biases the min/max range estimate, so quantized activations clip or underflow on real inputs.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Static quantization of a policy with the random-data fallback on an env whose observations are not Gaussian.</div></div>
+  <div class="row"><b>Detection</b><div>Per-dimension calibration statistics recorded and reported; choose <code>policy</code> (real rollouts), <code>random</code>, or <code>mixed</code> explicitly; compare quantized vs FP32 action MSE/cosine on held-out real observations.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Prefer <code>EnvironmentCalibrationGenerator</code> rollouts for static INT8; treat random calibration as a smoke test, not a deployment range estimate. Source: <code>benchmark/calibration.py</code>, <code>quantizer/int8.py::static_quantize</code>.</div></div>
+</div>
+
+<h2 id="export" class="toc-anchor">B · Export action semantics</h2>
+
+<div class="pitfall">
+  <h3>B1 · Missing action-bounds affine map on the verification side</h3>
+  <div class="row"><b>Phenomenon</b><div>The ONNX graph maps tanh ∈ [−1, 1] to the env's <code>[low, high]</code>, but the verification harness compares against raw tanh outputs. On a Pendulum-style asymmetric bound this produced a max action difference of ~0.43 even though the graph was correct.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Export a bounded action model without passing <code>action_low/high</code> to verification.</div></div>
+  <div class="row"><b>Detection</b><div>Reference-vs-ONNX action comparison on hand-chosen anchor inputs; large systematic offset flags the missing affine map.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Pass <code>action_low</code>/<code>action_high</code> through export and verify; anchors include the bounds and interior points. Tests: <code>TestModelExport</code> action-bounds cases in <code>tests/test_core.py</code>; source <code>exporter/onnx_export.py</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>B2 · A Python-level branch traced as a constant breaks dynamic batch</h3>
+  <div class="row"><b>Phenomenon</b><div>Code like <code>if low.shape[0] == 1: expand(...)</code> is evaluated at trace time and baked as a constant; batch > 1 then takes the wrong branch silently.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Export with dynamic batch and compare batch=1 vs batch=4 outputs.</div></div>
+  <div class="row"><b>Detection</b><div>PyTorch <code>TracerWarning</code> at export; a batch=1/batch=4 equivalence check catches the break.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Unconditional <code>expand</code> to the leading dimension inside the traced graph; never branch on tensor shape in Python during tracing. Test: batch=1 vs batch=4 match in <code>TestModelExport</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>B3 · Unclamped extrapolation outside [−1, 1]</h3>
+  <div class="row"><b>Phenomenon</b><div>Without <code>torch.clamp</code>, numerical drift outside tanh's saturated range maps to actions outside the env's legal bounds.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Hand-computed anchor inputs at and beyond the saturation edges.</div></div>
+  <div class="row"><b>Detection</b><div>Anchor-based verification asserts outputs stay within <code>[low, high]</code>.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Clamp the rescaled action to <code>[low, high]</code> in the exported graph. Source: <code>exporter/onnx_export.py</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>B4 · SB3 double-unscaling continuous actions</h3>
+  <div class="row"><b>Phenomenon</b><div><code>policy._predict</code> already returns actions mapped into the action space; re-applying the tanh-unscale on top produced ~2×-deviating ONNX output.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Train a tiny PPO on Pendulum-v1, export, compare ONNX output to <code>model.predict</code>.</div></div>
+  <div class="row"><b>Detection</b><div>Tight <code>np.allclose(atol=1e-5)</code> against <code>model.predict</code>; a second unscale gives ~0.1+ deviation.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Return the already-scaled action as-is in <code>exporter/sb3.py</code>. Test: <code>TestSB3Export::test_sb3_onnx_matches_predict</code> (skipped automatically when the <code>[sb3]</code> extra is absent).</div></div>
+</div>
+
+<h2 id="quant" class="toc-anchor">C · Quantization mechanics</h2>
+
+<div class="pitfall">
+  <h3>C1 · Static quantizer crashes: "Invalid rank: Got 1 Expected 2"</h3>
+  <div class="row"><b>Phenomenon</b><div>Random calibration samples are a flat 1-D vector; the onnxruntime quantizer expects a leading batch dim and raises a rank error instead of calibrating.</div></div>
+  <div class="row"><b>Minimal trigger</b><div><code>static_quantize(..., calibration_samples=8)</code> on a freshly exported ONNX model.</div></div>
+  <div class="row"><b>Detection</b><div>Quantized model must load and run; rank error appears immediately on the calibration call.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Add <code>obs[np.newaxis]</code> leading dim on the calibration batch. Test: <code>TestQuantization::test_static_quantize_with_random_data</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>C2 · Custom input name mismatch during calibration</h3>
+  <div class="row"><b>Phenomenon</b><div>A model exported under input name <code>"obs"</code> was calibrated against the hardcoded <code>"observation"</code>, so the quantization graph bound the wrong tensor.</div></div>
+  <div class="row"><b>Minimal trigger</b><div><code>ExportConfig(input_names=("obs",))</code> then static quantize without passing <code>input_name="obs"</code>.</div></div>
+  <div class="row"><b>Detection</b><div>Runtime lookup failure or silent binding to a missing tensor; explicit name round-trip test.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Thread the model's real input name through the random-calibration path, matching <code>static_quantize_with_dataset</code>. Test: <code>test_static_quantize_respects_custom_input_name</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>C3 · Missing shape inference leaves temp artifacts on save failure</h3>
+  <div class="row"><b>Phenomenon</b><div>Without <code>onnx.shape_inference</code>, onnxruntime pre-processing warns or errors; and a shared helper that writes a temp model leaked the file when <code>onnx.save</code> raised.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Monkeypatch <code>onnx.save</code> to raise inside <code>_shape_inferred_temp_model</code>; check the temp path afterwards.</div></div>
+  <div class="row"><b>Detection</b><div>Assert the temp file no longer exists after the propagated error.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Run shape inference in the shared preprocessing helper; unlink the temp file in an error path. Test: <code>test_shape_inferred_temp_model_cleans_up_when_save_fails</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>C4 · FP16 conversion exceptions were swallowed by a blanket <code>except</code></h3>
+  <div class="row"><b>Phenomenon</b><div>An earlier <code>except (ImportError, Exception): pass</code> masked real converter failures, silently emitting whatever the fallback left behind.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Force the <code>onnxruntime.transformers.float16</code> import to raise a non-ImportError failure; the conversion must raise <code>RuntimeError</code>, not return.</div></div>
+  <div class="row"><b>Detection</b><div>Only <code>ImportError</code> triggers the manual fallback; every other exception re-raises wrapped in <code>RuntimeError</code>. Manual fallback output passes <code>onnx.checker</code> and runs in onnxruntime.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Separate "converter unavailable" (warn, fallback) from "converter failed" (raise); manual Method-2 cannot honor <code>op_blocklist</code>, so it warns loudly instead of ignoring the setting; handle both <code>op_blocklist</code> / <code>op_block_list</code> kwarg names across onnxruntime versions. Tests: <code>test_fp16_conversion_roundtrip</code>, <code>test_fp16_manual_fallback_method2_runs</code>, <code>test_fp16_manual_fallback_warns_about_op_blocklist</code>, <code>test_evaluate_fp16_impact_respects_cosine_threshold</code>.</div></div>
+</div>
+
+<h2 id="latency" class="toc-anchor">D · Latency measurement hygiene</h2>
+
+<div class="pitfall">
+  <h3>D1 · No warm-up inflates first-call latency</h3>
+  <div class="row"><b>Phenomenon</b><div>Session creation, CUDA context / onnxruntime graph compilation, and memory allocation happen on the first <code>session.run</code>; including it in the sample biases P50/P90 upward.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Compare measured latency with and without <code>num_warmup</code> iterations.</div></div>
+  <div class="row"><b>Detection</b><div>Drop the first <code>num_warmup</code> calls (default 50) before timing; report P50/P90/P95/P99 from the steady-state sample.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Warm-up loop in <code>benchmark/latency.py</code>; same warm-up protocol across backends so numbers are comparable.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>D2 · Monitor handle leak and non-positive run counts</h3>
+  <div class="row"><b>Phenomenon</b><div>If benchmarking raised mid-run, the resource monitor was never stopped (NVML/psutil handle leak); and <code>num_runs ≤ 0</code> produced NaN percentiles.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Force a mid-benchmark exception; assert <code>monitor.stop()</code> ran; pass <code>num_runs=0</code>.</div></div>
+  <div class="row"><b>Detection</b><div><code>try/finally</code> around the timed loop; monitor snapshot failure is best-effort and dropped; reject <code>num_runs ≤ 0</code> up front.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Fail-closed validation and guaranteed cleanup in <code>benchmark/latency.py</code>; tests in <code>TestLatencyBenchmark</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>D3 · TensorRT per-call <code>cuda.mem_alloc/free</code> dominates the clock</h3>
+  <div class="row"><b>Phenomenon</b><div>Allocating and freeing device buffers on every measured call adds allocation overhead that is not part of steady-state inference and dwarfs the compute on small policies.</div></div>
+  <div class="row"><b>Detection</b><div>Profile allocation calls inside the timed region; compare cached vs per-call buffer latency.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Cache/reuse I/O buffers across calls in <code>runtime/tensorrt_runtime.py</code>; free them in <code>close()</code>/<code>__del__</code>. Note: this path is framework-only here (TensorRT not installed on the dev CPU), so it is reviewed code, not unit-tested on device.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>D4 · FPS caliber must be stated, not assumed</h3>
+  <div class="row"><b>Phenomenon</b><div>Latency measures the internal <code>session.run</code> call only; Python scheduling, copying, and observation preprocessing are excluded. Comparing to end-to-end frame rates elsewhere is invalid.</div></div>
+  <div class="row"><b>Detection</b><div>State the caliber in every report and README; keep the same caliber for all models in one comparison.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Report P50/P90/P95/P99 plus FPS derived from the same internal-call sample; never relabel as end-to-end throughput.</div></div>
+</div>
+
+<h2 id="report" class="toc-anchor">E · Reporting &amp; robustness</h2>
+
+<div class="pitfall">
+  <h3>E1 · Markdown written into a <code>.html</code> report</h3>
+  <div class="row"><b>Phenomenon</b><div><code>compare --output report.html</code> emitted Markdown content under an HTML suffix, so the viewer rendered raw markdown text.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Run <code>rl-deploy-bench compare fp32.onnx quant.onnx --output report.html</code> and inspect the head.</div></div>
+  <div class="row"><b>Detection</b><div>Branch on file extension: real HTML starts with <code>&lt;!doctype html&gt;</code>/<code>&lt;html&gt;</code> and contains plotly; Markdown does not.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Extension-dispatched generator in <code>cli.py</code>. Test: <code>test_compare_html_output_is_real_html</code> (asserts plotly present).</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>E2 · HTML/Markdown injection from model metadata</h3>
+  <div class="row"><b>Phenomenon</b><div>Model name, title, and platform_info flow into reports; HTML tags in a name would inject markup, and <code>|</code> or newlines would break Markdown tables.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Name the model <code>&lt;img src=x onerror=1&gt; | a
+b</code>; generate both reports.</div></div>
+  <div class="row"><b>Detection</b><div>Inspect emitted files for unescaped tags / broken table rows.</div></div>
+  <div class="row"><b>Fix / avoid</b><div><code>html.escape</code> in the HTML reporter; <code>|</code> escaped and newlines folded in the Markdown reporter. Tests: <code>test_html_report_escapes_model_name_and_title</code>, <code>test_markdown_report_escapes_pipe_in_name</code>, <code>test_markdown_report_folds_newlines_in_model_name</code>, <code>test_markdown_report_title_folds_newlines</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>E3 · Divide-by-zero on degenerate latency samples</h3>
+  <div class="row"><b>Phenomenon</b><div>Empty or zero-duration samples make FPS/MSE denominators zero and crash report generation.</div></div>
+  <div class="row"><b>Detection</b><div>Guard denominators; render <code>n/a</code> instead of inf/NaN.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>NaN-safe formatting in the reporters; <code>n/a</code> for undefined ratios.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>E4 · NVML session leak when mid-init detection raises</h3>
+  <div class="row"><b>Phenomenon</b><div><code>nvmlInit()</code> succeeded but a later <code>nvmlDeviceGetHandleByIndex</code> raised; without <code>nvmlShutdown()</code> in the error path the NVML session leaked. Same pattern in platform detection and the GPU monitor.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Monkeypatch a fake pynvml whose handle call raises; assert <code>nvmlShutdown</code> was called exactly once.</div></div>
+  <div class="row"><b>Detection</b><div>Mock-based assertion of shutdown calls on the failure path.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Shutdown in the except branch of both <code>platform.py</code> detection and <code>monitor/nvidia_gpu.py</code>. Tests: <code>test_detect_nvidia_gpu_shuts_down_nvml_when_middle_step_raises</code>, <code>test_start_shuts_down_nvml_when_get_handle_raises</code>.</div></div>
+</div>
+
+<div class="pitfall">
+  <h3>E5 · Non-ASCII Windows path breaks TorchScript saving; duck-typing the benchmark seam</h3>
+  <div class="row"><b>Phenomenon</b><div>On Windows, <code>torch.jit.save</code> through a Chinese-character (non-ASCII) path can fail; and a custom runtime that omitted the <code>actions</code>/<code>latency_ms</code>/<code>get_provider_info</code> seam crashed <code>benchmark_latency</code> with <code>AttributeError</code>.</div></div>
+  <div class="row"><b>Minimal trigger</b><div>Export TorchScript to a non-ASCII path; dock a TorchScript runtime into <code>benchmark_latency</code> end-to-end.</div></div>
+  <div class="row"><b>Detection</b><div>Smoke test matches PyTorch reference and reports <code>backend="torchscript"</code> with a captured input shape.</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Copy to a unique ASCII temp path before <code>torch.jit.save</code> in <code>exporter/torchscript_export.py</code>; provide the unified inference duck interface so alternate backends plug into the same loop. Legacy <code>torch.jit</code> emits a FutureWarning on newer torch; ONNX / <code>torch.export</code> are preferred. Test: <code>TestTorchScriptExport::test_torchscript_smoke_matches_pytorch_and_docks_into_benchmark</code>. (The non-ASCII temp-copy path itself is platform hardening without a dedicated hermetic test.)</div></div>
+</div>
+
+<h2 id="repro" class="toc-anchor">Reproduction</h2>
+<pre><code>git clone git@github.com:dafahaha/rl-deploy-bench.git
+cd rl-deploy-bench
+pip install -e ".[dev,sb3]"
+
+# full regression suite (matrix: Python 3.10 / 3.11 / 3.12 in CI)
+pytest tests/ -v
+
+# static checks enforced in CI
+black --check src tests
+isort --check-only src tests
+flake8 src tests
+
+# shipped walkthrough (small MLP, CPU)
+python demo.py
+
+# CLI: export -&gt; convert/quantize -&gt; benchmark -&gt; compare
+rl-deploy-bench export model.pt --env Pendulum-v1 --output model.onnx
+rl-deploy-bench convert model.onnx --format fp16 --output model_fp16.onnx
+rl-deploy-bench benchmark model.onnx --obs-shape 3 --num-runs 2000 --output report.md
+rl-deploy-bench compare fp32.onnx quant.onnx --obs-shape 3 --num-samples 100 --output report.html</code></pre>
+<p class="src">
+  CI: <code>.github/workflows/ci.yml</code> runs lint (black/isort/flake8), mypy, and pytest on
+  Ubuntu across Python 3.10–3.12; optional extras are guarded with <code>importorskip</code> so the
+  suite stays green without TensorRT, the SB3 extra, or a GPU.
+</p>
+
+<div class="callout note">
+  <span class="tag">Scope</span>
+  This is a personal exploratory engineering toolkit (v1.1.0, Beta per <code>pyproject.toml</code>).
+  Pitfalls above are documented from real bug-fix commits and locked by tests; they are not claims
+  about any framework being defective, and no on-device Jetson measurement is reported here.
+</div>
+
+<footer>
+  <span>Previous: <a href="sac-reward-scaling.html">SAC reward scaling null result</a></span>
+  <span><a href="methodology.html">Methodology &amp; honesty</a></span>
+</footer>
+
+</main>
+</div>
+</body>
+</html>

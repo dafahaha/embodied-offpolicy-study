@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daizhi Liao — RL &amp; Embodied AI Research Notes</title>
+<meta name="description" content="Honest exploratory research notes by Daizhi Liao (dafahaha): a pre-registered SAC reward-scaling null result on Hopper-v4, and a cross-platform RL deployment benchmarking toolkit with a tested pitfall taxonomy.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <a class="brand" href="index.html">Daizhi Liao<small>RL &amp; Embodied AI · research notes</small></a>
+  <nav>
+    <div class="group">Notes</div>
+    <a href="index.html" class="active">Home</a>
+    <a href="sac-reward-scaling.html">SAC reward scaling (null)</a>
+    <a href="deploy-bench.html">rl-deploy-bench pitfalls</a>
+    <a href="methodology.html">Methodology &amp; honesty</a>
+    <div class="group">Code</div>
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study" target="_blank" rel="noopener">Study 1 repository</a>
+    <a href="https://github.com/dafahaha/rl-deploy-bench" target="_blank" rel="noopener">Study 2 repository</a>
+    <a href="https://github.com/dafahaha" target="_blank" rel="noopener">GitHub profile</a>
+    <a href="https://dafahaha.github.io/transit-truth/" target="_blank" rel="noopener">TransitTruth demo</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+<header>
+  <h1>Research Notes</h1>
+  <p class="subtitle">Daizhi Liao (dafahaha) · Network Engineering, Guangzhou University · Reinforcement Learning &amp; Embodied AI</p>
+  <p class="lead">
+    Two exploratory, independently built artifacts presented with the numbers exactly as
+    measured: a <strong>pre-registered three-arm SAC experiment that returned a null result</strong>,
+    and a <strong>cross-platform RL deployment benchmarking toolkit</strong> whose tested failure
+    modes are collected into a deployment-pitfall taxonomy. These are course / independent
+    exploration projects, not published papers and not SOTA benchmarks.
+  </p>
+</header>
+
+<section class="card" id="study1">
+  <span class="pill null">Null result · pre-registered</span>
+  <h2 style="margin-top:10px;">1 · Does critic reward scaling change SAC on Hopper-v4?</h2>
+  <p>
+    A from-scratch PyTorch SAC (twin critics, soft targets, tanh-squashed Gaussian actor,
+    automatic entropy temperature) run on CPU at a 120k-step budget, 3 seeds per arm. The
+    pre-registered question was whether scaling the rewards entering the critic's Bellman
+    backup by 0.1 vs 1.0 changes sample efficiency or asymptotic return. The measured answer
+    at this budget and variance: <strong>no detectable effect</strong> (primary contrast
+    Baseline vs RewardScaled, Welch p = 0.953; ANOVA F = 0.22, p = 0.811). An apparent ~3&times;
+    win seen at an early 60k pass did not survive the full budget and a fixed-alpha control arm.
+  </p>
+  <div class="chips">
+    <span class="chip">PyTorch (from scratch)</span><span class="chip">SAC</span>
+    <span class="chip">Hopper-v4</span><span class="chip">Pre-registration</span>
+    <span class="chip">n = 3 seeds</span><span class="chip">CPU · 120k steps</span>
+  </div>
+  <p>
+    <a href="sac-reward-scaling.html">Read the study page</a> ·
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study" target="_blank" rel="noopener">Repository</a> ·
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study/blob/main/PRE_REGISTRATION.md" target="_blank" rel="noopener">Pre-registration</a> ·
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study/blob/main/RESEARCH_RETRO.md" target="_blank" rel="noopener">Retrospective</a>
+  </p>
+</section>
+
+<section class="card" id="study2">
+  <span class="pill tool">Engineering toolkit · v1.1.0</span>
+  <h2 style="margin-top:10px;">2 · rl-deploy-bench: cross-platform deployment pitfalls, tested</h2>
+  <p>
+    A config-driven CLI and Python API that exports policies to ONNX/TorchScript, converts to
+    FP16/INT8, and benchmarks latency (P50/P90/P95/P99), throughput, and RL-specific action
+    accuracy, with auto-generated Markdown/HTML reports. Instead of advertising speedups, the
+    notes below catalog the <strong>failure modes actually hit and fixed</strong> — calibration
+    dry episodes, action-bounds affine mismatches, missing batch dims in static quantization,
+    silently swallowed converter errors, monitor-handle leaks, and report injection — each with
+    a minimal trigger, a detection method, and the regression test that locks the fix.
+  </p>
+  <div class="chips">
+    <span class="chip">ONNX</span><span class="chip">TorchScript</span>
+    <span class="chip">FP16 / INT8</span><span class="chip">Latency P50–P99</span>
+    <span class="chip">pytest · CI on 3.10/3.11/3.12</span>
+  </div>
+  <p>
+    <a href="deploy-bench.html">Read the pitfall taxonomy</a> ·
+    <a href="https://github.com/dafahaha/rl-deploy-bench" target="_blank" rel="noopener">Repository</a> ·
+    <a href="https://github.com/dafahaha/rl-deploy-bench/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog v1.1.0</a> ·
+    <a href="https://github.com/dafahaha/rl-deploy-bench/blob/main/API.md" target="_blank" rel="noopener">API docs</a>
+  </p>
+</section>
+
+<div class="callout note">
+  <span class="tag">Scope and honesty</span>
+  These are exploratory self-directed projects built for PhD application evidence: they demonstrate
+  research process (pre-registration, control arms, honest null reporting) and engineering rigor
+  (regression tests, fail-closed paths, reproducible commands), not a published scientific finding
+  or a state-of-the-art deployment benchmark. Statistical power at n = 3 is essentially zero;
+  "not detectable" here is deliberately not claimed as "no effect". See
+  <a href="methodology.html">Methodology &amp; honesty</a>.
+</div>
+
+<footer>
+  <span>Daizhi Liao · <a href="https://github.com/dafahaha" target="_blank" rel="noopener">github.com/dafahaha</a></span>
+  <span><a href="https://dafahaha.github.io/" target="_blank" rel="noopener">Personal site</a> ·
+    <a href="https://github.com/dafahaha/transit-truth" target="_blank" rel="noopener">TransitTruth</a></span>
+</footer>
+
+</main>
+</div>
+</body>
+</html>

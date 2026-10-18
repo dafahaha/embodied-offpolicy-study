@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAC reward scaling on Hopper-v4 — a pre-registered null · Daizhi Liao</title>
+<meta name="description" content="Pre-registered three-arm SAC study (Baseline / RewardScaled / FixedAlpha) on Hopper-v4, CPU, 120k steps, 3 seeds; measured null result with exact Welch p-values, effect size and CIs from the committed CSVs.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="sidebar">
+  <a class="brand" href="index.html">Daizhi Liao<small>RL &amp; Embodied AI · research notes</small></a>
+  <nav>
+    <div class="group">Notes</div>
+    <a href="index.html">Home</a>
+    <a href="sac-reward-scaling.html" class="active">SAC reward scaling (null)</a>
+    <a href="deploy-bench.html">rl-deploy-bench pitfalls</a>
+    <a href="methodology.html">Methodology &amp; honesty</a>
+    <div class="group">On this page</div>
+    <a href="#motivation" class="sub">Motivation</a>
+    <a href="#design" class="sub">Pre-registered design</a>
+    <a href="#implementation" class="sub">Implementation &amp; validation</a>
+    <a href="#results" class="sub">Results (null)</a>
+    <a href="#interpretation" class="sub">Why the null matters</a>
+    <a href="#bug" class="sub">The log-prob bug</a>
+    <a href="#repro" class="sub">Reproduction</a>
+    <a href="#limits" class="sub">Limitations</a>
+    <div class="group">Code</div>
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study" target="_blank" rel="noopener">Repository</a>
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study/blob/main/PRE_REGISTRATION.md" target="_blank" rel="noopener">Pre-registration</a>
+    <a href="https://github.com/dafahaha/embodied-offpolicy-study/blob/main/RESEARCH_RETRO.md" target="_blank" rel="noopener">Retrospective</a>
+  </nav>
+</aside>
+
+<main class="content">
+
+<header>
+  <h1>Does critic reward scaling change SAC on Hopper-v4? A pre-registered null result</h1>
+  <p class="subtitle">From-scratch PyTorch SAC · three arms · CPU · 120k steps/run · 3 seeds/arm</p>
+  <p class="meta">Repository: <a href="https://github.com/dafahaha/embodied-offpolicy-study" target="_blank" rel="noopener">dafahaha/embodied-offpolicy-study</a> · pre-registered 2026-10-01 before any Hopper result was inspected · independent recompute script: <code>docs/assets/recompute_stats.py</code></p>
+</header>
+
+<div class="callout warn">
+  <span class="tag">Bottom line</span>
+  At 120k CPU steps and n = 3 seeds, the pre-registered contrast (Baseline vs RewardScaled) shows
+  <strong>no detectable effect</strong>: Welch p = 0.953, mean difference −33.6 return points with a
+  95% CI of [−1540, 1473], Cohen's d = −0.05. One-way ANOVA across the three arms: F = 0.22,
+  p = 0.811. This is "not detectable at this budget and variance", <strong>not</strong> "reward
+  scaling has no effect".
+</div>
+
+<h2 id="motivation" class="toc-anchor">1 · Motivation</h2>
+<p>
+  SAC (Haarnoja et al., 2018) couples the Q-magnitude to the entropy temperature α through
+  the max-entropy objective. A common engineering knob is to multiply the reward entering the
+  critic's Bellman backup by a fixed <code>reward_scale</code>, which shrinks Q-target magnitude.
+  The pre-registered hypothesis was that smaller Q targets reduce critic over-estimation bias and
+  stabilise learning, yielding higher asymptotic deterministic return and faster early learning on
+  Hopper-v4. The goal of the project was not to invent an algorithm: it was to implement SAC
+  correctly from scratch, instrument it, run a controlled multi-seed measurement, and report
+  whatever the data said.
+</p>
+
+<h2 id="design" class="toc-anchor">2 · Pre-registered design</h2>
+<p>
+  The hypothesis and primary outcome were written in
+  <a href="https://github.com/dafahaha/embodied-offpolicy-study/blob/main/PRE_REGISTRATION.md" target="_blank" rel="noopener">PRE_REGISTRATION.md</a>
+  on 2026-10-01, immediately after Pendulum validation and before launching any Hopper run. The
+  logged Bellman target in <code>src/sac.py</code> is:
+</p>
+<div class="eq">y = reward_scale · r + γ(1 − done)·(min Q<sub>target</sub> − α·log π)</div>
+<p>The logged episode return is always the <em>unscaled</em> env return, so arms are compared on the true objective.</p>
+
+<table>
+  <thead><tr><th>Arm</th><th class="num">reward_scale</th><th>entropy temperature</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Baseline</strong></td><td class="num">1.0</td><td>auto-tuned α (init 0.2)</td><td>rewards as emitted by the env</td></tr>
+    <tr><td><strong>RewardScaled</strong></td><td class="num">0.1</td><td>auto-tuned α (init 0.2)</td><td><em>pre-registered arm</em>: shrink Q targets</td></tr>
+    <tr><td><strong>FixedAlpha</strong></td><td class="num">0.1</td><td>α = 0.2 frozen, no auto-tune</td><td><em>post-hoc control</em>: separate reward scaling from the auto-tuned α trajectory</td></tr>
+  </tbody>
+</table>
+
+<p>Shared settings across all arms (from <code>configs/sac_hopper_*.yaml</code>):</p>
+<ul>
+  <li>Env Hopper-v4; 120,000 env steps per run; 1 gradient step per step after 1000 warmup steps.</li>
+  <li>256×256 MLPs; Adam lr 3e-4; γ = 0.99; τ = 0.005; batch 256; replay buffer 1e6.</li>
+  <li>Deterministic eval: 5 episodes per eval point, every 5k steps; asymptotic window = last 4 eval points (105k–120k).</li>
+  <li>Seeds 0, 1, 2 per arm; CPU only, 4 torch threads; no Hopper hyperparameter tuning.</li>
+</ul>
+
+<div class="callout note">
+  <span class="tag">Pre-registered vs added later</span>
+  The <strong>primary confirmatory contrast is Baseline vs RewardScaled</strong>. The FixedAlpha arm,
+  the three pairwise Welch tests, and the one-way ANOVA were added after the first 60k pass as
+  exploratory post-hoc analyses and are <strong>uncorrected for multiple comparisons</strong>;
+  they are reported descriptively only. See <a href="methodology.html">Methodology &amp; honesty</a>.
+</div>
+
+<h2 id="implementation" class="toc-anchor">3 · Implementation &amp; end-to-end validation</h2>
+<p>
+  SAC is implemented from scratch in PyTorch (no Stable-Baselines3): uniform circular replay buffer,
+  tanh-squashed diagonal-Gaussian actor whose analytic log-prob includes both the tanh Jacobian and
+  the linear action-rescale Jacobian, twin critics with min-over-Q, soft target updates, and
+  automatic entropy temperature. Before any Hopper run the loop was validated on Pendulum-v1:
+  deterministic eval return improved from roughly −1600 to roughly −85 within 6k steps
+  (per <code>RESEARCH_RETRO.md</code>). CI keeps a loose learn gate (Δ ≥ 150) that asserts the
+  deterministic eval return actually improves on Pendulum rather than merely running.
+</p>
+
+<h2 id="results" class="toc-anchor">4 · Results — measured null</h2>
+<p>
+  Asymptotic window = last 4 eval points (105k–120k); each per-seed value is the mean of those four
+  deterministic eval returns. Mean ± sample SD (ddof = 1), n = 3. Every figure below is recomputed
+  independently from the committed raw CSVs by <code>docs/assets/recompute_stats.py</code>
+  (machine-readable output: <code>docs/assets/results.json</code>).
+</p>
+
+<table>
+  <thead><tr><th>Arm</th><th class="num">per-seed tail means (s0, s1, s2)</th><th class="num">Mean</th><th class="num">SD</th><th class="num">t-95% half-width (df=2)</th></tr></thead>
+  <tbody>
+    <tr><td>Baseline (scale 1.0, auto α)</td><td class="num">547.4, 1873.2, 833.1</td><td class="num">1084.6</td><td class="num">697.7</td><td class="num">±1733.2</td></tr>
+    <tr><td>RewardScaled (scale 0.1, auto α)</td><td class="num">644.6, 886.1, 1823.8</td><td class="num">1118.2</td><td class="num">622.9</td><td class="num">±1547.3</td></tr>
+    <tr><td>FixedAlpha (scale 0.1, α=0.2)</td><td class="num">2133.1, 1038.7, 1039.2</td><td class="num">1403.6</td><td class="num">631.7</td><td class="num">±1569.2</td></tr>
+  </tbody>
+</table>
+
+<p class="src">Source: <code>logs/hopper_{baseline,rewardscale,fixedalpha}_s{0,1,2}/progress.csv</code>,
+<code>phase == "eval"</code>, last 4 rows; recomputed by <code>docs/assets/recompute_stats.py</code>.
+(The README rounds these to 1085 ± 698, 1118 ± 623, 1404 ± 632.)</p>
+
+<h3>Pairwise Welch t-tests (scipy <code>ttest_ind</code>, equal_var = False)</h3>
+<table>
+  <thead><tr><th>Contrast</th><th class="num">t</th><th class="num">p</th><th class="num">mean diff</th><th class="num">95% CI (Welch)</th></tr></thead>
+  <tbody>
+    <tr><td>Baseline vs RewardScaled <em>(pre-registered)</em></td><td class="num">−0.062</td><td class="num">0.953</td><td class="num">−33.6</td><td class="num">[−1540.4, 1473.3]</td></tr>
+    <tr><td>Baseline vs FixedAlpha</td><td class="num">−0.587</td><td class="num">0.589</td><td class="num">−319.1</td><td class="num">[−1833.6, 1195.5]</td></tr>
+    <tr><td>FixedAlpha vs RewardScaled</td><td class="num">+0.557</td><td class="num">0.607</td><td class="num">+285.5</td><td class="num">[−1136.7, 1707.7]</td></tr>
+  </tbody>
+</table>
+<p>One-way ANOVA (<code>scipy.f_oneway</code>): F = 0.217, p = 0.811. Primary-contrast effect size:
+Cohen's d = −0.051, Hedges' g = −0.041 (pooled SD 661.4) — a trivially small point estimate that
+is itself unreliable at n = 3.</p>
+
+<figure>
+  <img src="assets/learning_curve.png" alt="SAC learning curves on Hopper-v4; shade is +/- 1 SD across seeds">
+  <figcaption>Figure 1. Deterministic eval return over 120k steps; mean line across seeds, shaded ±1 SD.
+  Produced by <code>plot.py</code> from the committed CSVs.</figcaption>
+</figure>
+
+<figure>
+  <img src="assets/asymptotic.png" alt="Asymptotic eval return: mean plus t-based 95% CI, dots are individual seeds">
+  <figcaption>Figure 2. Asymptotic mean + t-based 95% CI (df = 2); dots are individual seeds. The
+  intervals are wider than the arm-to-arm gaps, which is the quantitative content of the null.</figcaption>
+</figure>
+
+<h3>Descriptive training dynamics (last logged train row per seed)</h3>
+<p>
+  Reward scaling couples to the auto-tuned temperature, which is why the FixedAlpha control was
+  added. From the committed CSVs: final α mean ≈ 0.080 (Baseline; per-seed 0.066, 0.106,
+  0.068) vs ≈ 0.0055 (RewardScaled; 0.0037, 0.0066, 0.0063), and FixedAlpha holds α = 0.2 by
+  construction. Final mean Q₁: Baseline ≈ 170, RewardScaled ≈ 19, FixedAlpha ≈ 36. These are
+  descriptive, not inferential.
+</p>
+
+<h2 id="interpretation" class="toc-anchor">5 · Why this null result is worth reporting</h2>
+<ul>
+  <li><strong>The tempting result overturned.</strong> The first 60k pass looked like reward scaling won by ~3× (narrative in <code>RESEARCH_RETRO.md</code>; those old CSVs are not committed). Restoring the pre-registered 120k budget and adding the fixed-alpha control showed that gap was early-training seed noise, not a benefit.</li>
+  <li><strong>Pre-registration survived contact with the data.</strong> The direction was registered in advance; when the data came back null, the conclusion was written as null rather than reframed.</li>
+  <li><strong>The control arm isolates a confound.</strong> Reward scaling acts through two paths — Q-target magnitude and the auto-tuned α trajectory. Without FixedAlpha, any apparent difference could not be attributed to critic bias alone.</li>
+  <li><strong>Variance is reported, not smoothed.</strong> One seed per arm runs away to ~1800–2100 while others sit ~600–1000; raw seed dots are shown rather than a tidy 1.96×SEM interval that would look falsely precise.</li>
+</ul>
+
+<h2 id="bug" class="toc-anchor">6 · The bug that taught the workflow lesson</h2>
+<p>
+  The first Pendulum run appeared to learn nothing: Q-values went positive despite all-negative
+  rewards, and deterministic eval returned the same bad number at every checkpoint. A 20-line
+  diagnostic found log π exploding to ~1e15: the Gaussian log-prob was centred at zero
+  x² instead of at the predicted mean (x − μ)², and that spurious gradient collapsed the
+  policy. One-line fix, but the lesson was operational: check the quantities that <em>must</em>
+  have the right sign/magnitude (Q sign here) before concluding "more data will fix it". The fix is
+  locked by analytic log-prob tests in <code>tests/test_core.py</code> (including a non-zero-mean,
+  non-unit-std case checked against scipy's multivariate-normal logpdf).
+</p>
+
+<h2 id="repro" class="toc-anchor">7 · Reproduction &amp; tests</h2>
+<pre><code>pip install -r requirements.txt
+
+# unit tests (buffer, actor log-prob &amp; Jacobian, critic shapes, one SAC update,
+# reward_scale linearity, plot stats, learn gate, divergence guards)
+pytest tests/ -q
+
+# end-to-end learn gate on Pendulum (asserts eval improves, Delta &gt;= 150)
+python ci_check.py
+
+# validation run (not part of the Hopper study)
+python train.py --config configs/sac_pendulum.yaml --seed 0 --out logs/pendulum_val_s0
+
+# one arm of the study (repeat per seed / config)
+python train.py --config configs/sac_hopper_baseline.yaml    --seed 0 --out logs/hopper_baseline_s0
+python train.py --config configs/sac_hopper_rewardscale.yaml --seed 0 --out logs/hopper_rewardscale_s0
+python train.py --config configs/sac_hopper_fixedalpha.yaml  --seed 0 --out logs/hopper_fixedalpha_s0
+
+# plots + summary stats from the committed CSVs
+python plot.py
+
+# independent recompute used on this page
+python docs/assets/recompute_stats.py</code></pre>
+<p class="src">
+  Environment note: <code>PRE_REGISTRATION.md</code> planned gymnasium 1.3.0 / mujoco 3.14.0; the
+  committed Hopper CSVs were produced on gymnasium 1.4.0 / mujoco 3.15.0 (pinned in
+  <code>requirements.txt</code>). Hopper-v4 reward semantics are unchanged across these minor bumps;
+  the discrepancy is logged in the README rather than retro-edited into the pre-registration.
+</p>
+
+<h2 id="limits" class="toc-anchor">8 · Honest limitations</h2>
+<ul>
+  <li>Single environment (Hopper-v4), 120k steps, CPU only — not SOTA, not a 1M-step benchmark.</li>
+  <li>n = 3 with this seed variance gives essentially <strong>no statistical power</strong>; a null here means "not detectable", never "no effect". Modest effects would be invisible.</li>
+  <li>No observation normalisation; bootstrap on time-limit truncation (correct), but rewards are not normalised.</li>
+  <li>Multi-threaded CPU torch reductions are not bit-deterministic; re-runs reproduce the qualitative result, not identical floats (hence the loose learn gate).</li>
+  <li>FixedAlpha and the post-hoc tests are uncorrected exploratory analyses.</li>
+</ul>
+
+<footer>
+  <span>Next: <a href="deploy-bench.html">rl-deploy-bench pitfall taxonomy</a></span>
+  <span><a href="methodology.html">Methodology &amp; honesty</a></span>
+</footer>
+
+</main>
+</div>
+</body>
+</html>
