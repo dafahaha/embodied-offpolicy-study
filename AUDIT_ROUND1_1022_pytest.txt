@@ -1,0 +1,30 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.16, pytest-9.1.1, pluggy-1.7.0 -- D:\github项目\embodied-offpolicy-study\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\github项目\embodied-offpolicy-study
+plugins: platformdirs-4.13.5
+collecting ... collected 21 items
+
+tests/test_core.py::test_replay_buffer_shapes_and_circular PASSED        [  4%]
+tests/test_core.py::test_actor_output_in_bounds_and_logprob PASSED       [  9%]
+tests/test_core.py::test_critic_twin_shapes PASSED                       [ 14%]
+tests/test_core.py::test_logprob_analytic_rescale_jacobian PASSED        [ 19%]
+tests/test_core.py::test_logprob_analytic_nonzero_mean_and_std PASSED    [ 23%]
+tests/test_core.py::test_sac_update_smoke_finite_and_target_moves PASSED [ 28%]
+tests/test_core.py::test_reward_scale_scales_bellman_target_linear PASSED [ 33%]
+tests/test_core.py::test_plot_stats_match_scipy_on_toy_arrays PASSED     [ 38%]
+tests/test_core.py::test_learn_gate_delta_200_passes PASSED              [ 42%]
+tests/test_core.py::test_learn_gate_delta_50_fails PASSED                [ 47%]
+tests/test_core.py::test_learn_gate_empty_series_is_clean_fail PASSED    [ 52%]
+tests/test_core.py::test_subprocess_failure_propagates_nonzero_exit PASSED [ 57%]
+tests/test_core.py::test_subprocess_success_returns_normally PASSED      [ 61%]
+tests/test_core.py::test_guard_aborts_on_nonfinite_logp PASSED           [ 66%]
+tests/test_core.py::test_guard_warns_on_large_q1_but_does_not_abort PASSED [ 71%]
+tests/test_core.py::test_guard_warns_on_huge_finite_logp_but_does_not_abort PASSED [ 76%]
+tests/test_core.py::test_guard_silent_on_healthy_logp PASSED             [ 80%]
+tests/test_core.py::test_validate_grid_aligned_passes PASSED             [ 85%]
+tests/test_core.py::test_validate_grid_missing_end_point_raises PASSED   [ 90%]
+tests/test_core.py::test_validate_grid_unequal_seed_counts_raises PASSED [ 95%]
+tests/test_core.py::test_load_runs_rejects_nonfinite_eval_return PASSED  [100%]
+
+============================= 21 passed in 6.18s ==============================
