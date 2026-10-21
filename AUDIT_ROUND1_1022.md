@@ -60,8 +60,26 @@ the committed tests. No source file was modified this round.
 3. **E5 overclaim:** the note said the ASCII temp-copy happens "before
    `torch.jit.save`"; the hardening actually sits in `_safe_load_torchscript` on
    the **load** side; corrected to match the code.
+4. **Missing blog cross-link:** `docs/index.html` footer linked the personal site
+   but not the blog; added an absolute `https://dafahaha.github.io/blog/` link
+   (verified live) between Personal site and TransitTruth.
 
 No research conclusion, number, or arm definition was altered.
+
+### Site / Pages verification (2026-10-22)
+
+- All internal nav (Home / SAC null / deploy-bench pitfalls / Methodology) and
+  every relative asset (`assets/style.css`, `learning_curve.png`,
+  `asymptotic.png`, `recompute_stats.py`, `results.json`) resolve on disk; the
+  two figures are tracked blobs identical to `figures/`.
+- The expected URL `https://dafahaha.github.io/embodied-offpolicy-study/`
+  (and `/index.html`, `/docs/`, `/sac-reward-scaling.html`) returns 404:
+  GitHub Pages is **not enabled / not published** for this repo. The personal
+  homepage (`dafahaha.github.io`) "Write-up" button points to the
+  `RESEARCH_RETRO.md` blob, not to this static site. Anonymous API/Settings are
+  blocked (403), so enabling Pages is a maintainer Settings action this audit
+  could not perform; the site is ready to publish if the maintainer selects
+  main `/docs` as the Pages source. No Pages URL can be claimed as live.
 
 ### Checked and already correct (no change)
 
