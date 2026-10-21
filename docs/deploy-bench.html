@@ -212,7 +212,7 @@ b</code>; generate both reports.</div></div>
   <div class="row"><b>Phenomenon</b><div>On Windows, <code>torch.jit.save</code> through a Chinese-character (non-ASCII) path can fail; and a custom runtime that omitted the <code>actions</code>/<code>latency_ms</code>/<code>get_provider_info</code> seam crashed <code>benchmark_latency</code> with <code>AttributeError</code>.</div></div>
   <div class="row"><b>Minimal trigger</b><div>Export TorchScript to a non-ASCII path; dock a TorchScript runtime into <code>benchmark_latency</code> end-to-end.</div></div>
   <div class="row"><b>Detection</b><div>Smoke test matches PyTorch reference and reports <code>backend="torchscript"</code> with a captured input shape.</div></div>
-  <div class="row"><b>Fix / avoid</b><div>Copy to a unique ASCII temp path before <code>torch.jit.save</code> in <code>exporter/torchscript_export.py</code>; provide the unified inference duck interface so alternate backends plug into the same loop. Legacy <code>torch.jit</code> emits a FutureWarning on newer torch; ONNX / <code>torch.export</code> are preferred. Test: <code>TestTorchScriptExport::test_torchscript_smoke_matches_pytorch_and_docks_into_benchmark</code>. (The non-ASCII temp-copy path itself is platform hardening without a dedicated hermetic test.)</div></div>
+  <div class="row"><b>Fix / avoid</b><div>Copy to a unique ASCII temp path inside <code>_safe_load_torchscript</code> before <code>torch.jit.load</code> (the non-ASCII Windows hardening lives on the load side; <code>torch.jit.save</code> writes to the requested path); provide the unified inference duck interface so alternate backends plug into the same loop. Legacy <code>torch.jit</code> emits a FutureWarning on newer torch; ONNX / <code>torch.export</code> are preferred. Test: <code>TestTorchScriptExport::test_torchscript_smoke_matches_pytorch_and_docks_into_benchmark</code>. (The non-ASCII temp-copy path itself is platform hardening without a dedicated hermetic test.)</div></div>
 </div>
 
 <h2 id="repro" class="toc-anchor">Reproduction</h2>
@@ -231,15 +231,18 @@ flake8 src tests
 # shipped walkthrough (small MLP, CPU)
 python demo.py
 
-# CLI: export -&gt; convert/quantize -&gt; benchmark -&gt; compare
-rl-deploy-bench export model.pt --env Pendulum-v1 --output model.onnx
-rl-deploy-bench convert model.onnx --format fp16 --output model_fp16.onnx
+# CLI: export an SB3 policy -&gt; quantize -&gt; benchmark -&gt; compare
+rl-deploy-bench export ppo_pendulum.zip --algo PPO --output model.onnx
+rl-deploy-bench quantize model.onnx --mode dynamic --output model_int8.onnx
 rl-deploy-bench benchmark model.onnx --obs-shape 3 --num-runs 2000 --output report.md
-rl-deploy-bench compare fp32.onnx quant.onnx --obs-shape 3 --num-samples 100 --output report.html</code></pre>
+rl-deploy-bench compare model.onnx model_int8.onnx --obs-shape 3 --num-samples 100 --output report.html
+# FP16 conversion has no CLI subcommand; it is a Python-API call
+# (convert_onnx_to_fp16) in quantizer/fp16.py.</code></pre>
 <p class="src">
-  CI: <code>.github/workflows/ci.yml</code> runs lint (black/isort/flake8), mypy, and pytest on
-  Ubuntu across Python 3.10–3.12; optional extras are guarded with <code>importorskip</code> so the
-  suite stays green without TensorRT, the SB3 extra, or a GPU.
+  CI: <code>.github/workflows/ci.yml</code> runs black/isort/flake8, byte-compile, and pytest on
+  Ubuntu across Python 3.10–3.12 (mypy is a local-only check and is intentionally not run in CI);
+  optional extras are guarded with <code>importorskip</code> so the suite stays green without
+  TensorRT, the SB3 extra, or a GPU.
 </p>
 
 <div class="callout note">
