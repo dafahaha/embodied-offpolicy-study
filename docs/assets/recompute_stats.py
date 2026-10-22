@@ -44,6 +44,11 @@ ARM_LABELS = {
     "rewardscale": "RewardScaled (reward_scale=0.1, auto alpha)",
     "fixedalpha": "FixedAlpha (reward_scale=0.1, alpha=0.2 frozen)",
 }
+# Fixed arm order for JSON keys. glob.glob returns files in a filesystem-dependent
+# order (different on Windows vs Linux), so building the output dict straight from
+# glob order produced different key ordering across platforms and failed the
+# results.json `git diff` gate. Any unknown arm is appended, sorted.
+ARM_ORDER = ["baseline", "rewardscale", "fixedalpha"]
 
 
 def arm_of(run_dir: str) -> str | None:
@@ -86,7 +91,11 @@ def load_tail_means() -> dict[str, list[float]]:
 
     out: dict[str, list[float]] = {}
     dyn_out: dict[str, dict] = {}
-    for arm, seeds in per_seed.items():
+    ordered_arms = [*ARM_ORDER, *sorted(set(per_seed) - set(ARM_ORDER))]
+    for arm in ordered_arms:
+        if arm not in per_seed:
+            continue
+        seeds = per_seed[arm]
         tail = [float(arr[-TAIL_EVAL_POINTS:].mean()) for _, arr in sorted(seeds.items())]
         out[arm] = tail
         ds = [dynamics[arm][s] for s in sorted(dynamics[arm])]
