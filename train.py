@@ -148,82 +148,88 @@ def main():
         "alpha",
         "q1_mean",
     ]
-    csv_file = open(csv_path, "w", newline="", encoding="utf-8")
-    writer = csv.DictWriter(csv_file, fieldnames=fields)
-    writer.writeheader()
-    csv_file.flush()
-
-    t0 = time.time()
-    obs, _ = env.reset(seed=args.seed)
-    ep_ret, ep_len, ep = 0.0, 0, 0
-    next_eval_at = eval_every
-    last_metrics = {}
-
-    for step in range(1, total_steps + 1):
-        if step < start_steps:
-            a = env.action_space.sample()
-        else:
-            a = agent.act(obs, deterministic=False)
-
-        next_obs, r, terminated, truncated, _ = env.step(a)
-        ep_ret += r
-        ep_len += 1
-        # Bootstrap on time-limit truncation, NOT on real termination.
-        buf.add(obs, a, r, next_obs, terminated)
-        obs = next_obs
-
-        if step >= start_steps:
-            last_metrics = agent.update(buf.sample(batch_size))
-            # Divergence guard: abort loudly instead of writing NaN/Inf into
-            # progress.csv (plot.py would otherwise spread it over the stats).
-            _guard_metrics(last_metrics, step)
-
-        if terminated or truncated:
-            ep += 1
-            writer.writerow(
-                {
-                    "env_step": step,
-                    "episode": ep,
-                    "phase": "train",
-                    "episode_return": ep_ret,
-                    "episode_length": ep_len,
-                    "eval_return": "",
-                    "time_sec": round(time.time() - t0, 2),
-                    "alpha": round(last_metrics.get("alpha", float("nan")), 4),
-                    "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
-                }
-            )
+    # Close the CSV handle on every exit path — including the divergence
+    # guard's sys.exit(3) — and close the env in finally, so the abort path
+    # does not leak handles. Exit-code semantics are unchanged: SystemExit
+    # propagates through the with/finally blocks untouched.
+    try:
+        with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fields)
+            writer.writeheader()
             csv_file.flush()
-            obs, _ = env.reset()
-            ep_ret, ep_len = 0.0, 0
 
-        if step >= next_eval_at:
-            ev = evaluate(agent, cfg["env_id"], args.seed, eval_episodes)
-            writer.writerow(
-                {
-                    "env_step": step,
-                    "episode": ep,
-                    "phase": "eval",
-                    "episode_return": "",
-                    "episode_length": "",
-                    "eval_return": round(ev, 2),
-                    "time_sec": round(time.time() - t0, 2),
-                    "alpha": round(last_metrics.get("alpha", float("nan")), 4),
-                    "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
-                }
-            )
-            csv_file.flush()
-            next_eval_at += eval_every
-            if step % (eval_every * 4) == 0:
-                print(
-                    f"[{args.out}] step={step}/{total_steps} eval={ev:.1f} "
-                    f"t={time.time()-t0:.0f}s",
-                    flush=True,
-                )
+            t0 = time.time()
+            obs, _ = env.reset(seed=args.seed)
+            ep_ret, ep_len, ep = 0.0, 0, 0
+            next_eval_at = eval_every
+            last_metrics = {}
 
-    csv_file.close()
-    env.close()
-    print(f"DONE {args.out} in {time.time()-t0:.0f}s", flush=True)
+            for step in range(1, total_steps + 1):
+                if step < start_steps:
+                    a = env.action_space.sample()
+                else:
+                    a = agent.act(obs, deterministic=False)
+
+                next_obs, r, terminated, truncated, _ = env.step(a)
+                ep_ret += r
+                ep_len += 1
+                # Bootstrap on time-limit truncation, NOT on real termination.
+                buf.add(obs, a, r, next_obs, terminated)
+                obs = next_obs
+
+                if step >= start_steps:
+                    last_metrics = agent.update(buf.sample(batch_size))
+                    # Divergence guard: abort loudly instead of writing NaN/Inf
+                    # into progress.csv (plot.py would otherwise spread it over
+                    # the stats). Handles are closed by the with/finally above.
+                    _guard_metrics(last_metrics, step)
+
+                if terminated or truncated:
+                    ep += 1
+                    writer.writerow(
+                        {
+                            "env_step": step,
+                            "episode": ep,
+                            "phase": "train",
+                            "episode_return": ep_ret,
+                            "episode_length": ep_len,
+                            "eval_return": "",
+                            "time_sec": round(time.time() - t0, 2),
+                            "alpha": round(last_metrics.get("alpha", float("nan")), 4),
+                            "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
+                        }
+                    )
+                    csv_file.flush()
+                    obs, _ = env.reset()
+                    ep_ret, ep_len = 0.0, 0
+
+                if step >= next_eval_at:
+                    ev = evaluate(agent, cfg["env_id"], args.seed, eval_episodes)
+                    writer.writerow(
+                        {
+                            "env_step": step,
+                            "episode": ep,
+                            "phase": "eval",
+                            "episode_return": "",
+                            "episode_length": "",
+                            "eval_return": round(ev, 2),
+                            "time_sec": round(time.time() - t0, 2),
+                            "alpha": round(last_metrics.get("alpha", float("nan")), 4),
+                            "q1_mean": round(last_metrics.get("q1_mean", float("nan")), 3),
+                        }
+                    )
+                    csv_file.flush()
+                    next_eval_at += eval_every
+                    if step % (eval_every * 4) == 0:
+                        print(
+                            f"[{args.out}] step={step}/{total_steps} eval={ev:.1f} "
+                            f"t={time.time()-t0:.0f}s",
+                            flush=True,
+                        )
+
+            print(f"DONE {args.out} in {time.time()-t0:.0f}s", flush=True)
+    finally:
+        env.close()
 
 
 if __name__ == "__main__":

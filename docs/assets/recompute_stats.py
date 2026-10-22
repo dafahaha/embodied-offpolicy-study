@@ -35,6 +35,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 LOG_ROOT = os.path.join(ROOT, "logs")
 TAIL_EVAL_POINTS = 4
+# Pre-registered secondary endpoint (hypothesis #2): eval return at 50k steps,
+# reported descriptively only (no inferential test at n = 3).
+EARLY_STEP = 50000
 
 ARM_LABELS = {
     "baseline": "Baseline (reward_scale=1.0, auto alpha)",
@@ -94,6 +97,40 @@ def load_tail_means() -> dict[str, list[float]]:
             "final_q1_mean_mean": round(float(np.mean([d["final_q1_mean"] for d in ds])), 1),
         }
     return out, dyn_out
+
+
+def load_early_point(step: int = EARLY_STEP) -> dict:
+    """Descriptive pre-registered secondary endpoint: single eval point at `step`.
+
+    Returns {arm: {per_seed: [...s0,s1,s2...], mean, sd_ddof1}}. No inferential
+    test is performed; n = 3 has no power and this endpoint was not pre-registered
+    for hypothesis testing.
+    """
+    per_seed: dict[str, dict[int, float]] = {}
+    for csv_path in glob.glob(os.path.join(LOG_ROOT, "hopper_*_s*", "progress.csv")):
+        run_dir = os.path.dirname(csv_path)
+        arm = arm_of(run_dir)
+        if arm is None:
+            continue
+        df = pd.read_csv(csv_path)
+        ev = df[df["phase"] == "eval"].copy()
+        ev["env_step"] = ev["env_step"].astype(int)
+        ev["eval_return"] = ev["eval_return"].astype(float)
+        row = ev[ev["env_step"] == step]
+        if len(row) != 1:
+            raise ValueError(f"expected one eval row at {step} in {csv_path}, got {len(row)}")
+        seed = int(re.search(r"_s(\d+)$", os.path.basename(run_dir)).group(1))
+        per_seed.setdefault(arm, {})[seed] = float(row["eval_return"].iloc[0])
+
+    out: dict[str, dict] = {}
+    for arm in ["baseline", "rewardscale", "fixedalpha"]:
+        vals = np.asarray([per_seed[arm][s] for s in sorted(per_seed[arm])])
+        out[arm] = {
+            "per_seed": [round(float(x), 2) for x in vals],
+            "mean": round(float(vals.mean()), 2),
+            "sd_ddof1": round(float(vals.std(ddof=1)), 2),
+        }
+    return out
 
 
 def welch(a: np.ndarray, b: np.ndarray) -> dict:
@@ -161,6 +198,10 @@ def main() -> None:
     primary = welch(np.asarray(tails["baseline"]), np.asarray(tails["rewardscale"]))
     primary.update(cohens_d(np.asarray(tails["baseline"]), np.asarray(tails["rewardscale"])))
 
+    # Pre-registered secondary endpoint (hypothesis #2: faster early learning at
+    # 50k). Descriptive only: single eval point per seed, n=3, no inferential test.
+    early = load_early_point(EARLY_STEP)
+
     results = {
         "caliber": {
             "env": "Hopper-v4",
@@ -176,6 +217,14 @@ def main() -> None:
         "anova": {"F": round(float(F), 3), "p": round(float(p_anova), 4)},
         "primary_contrast_baseline_vs_rewardscale": primary,
         "training_dynamics_final_step": dynamics,
+        "early_learning_50k_descriptive": {
+            "env_step": EARLY_STEP,
+            "note": "Pre-registered secondary endpoint (hypothesis #2, faster early "
+            "learning); single eval point per seed, n=3, descriptive only, no "
+            "inferential test. The pre-registered RewardScaled arm shows no "
+            "advantage over Baseline here.",
+            "arms": early,
+        },
     }
 
     out_path = os.path.join(HERE, "results.json")
@@ -204,6 +253,12 @@ def main() -> None:
         print(
             f"{arm:12s} alpha={d['final_alpha_per_seed']} "
             f"(mean {d['final_alpha_mean']}), q1_mean={d['final_q1_mean_per_seed']}"
+        )
+    print(f"\n=== Early learning at {EARLY_STEP} (descriptive, no test) ===")
+    for arm in arms:
+        e = early[arm]
+        print(
+            f"{arm:12s} mean={e['mean']:8.2f} SD={e['sd_ddof1']:8.2f} " f"per_seed={e['per_seed']}"
         )
     print(f"\nwrote {out_path}")
 

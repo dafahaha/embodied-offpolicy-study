@@ -137,5 +137,38 @@
       ],
       "final_q1_mean_mean": 19.3
     }
+  },
+  "early_learning_50k_descriptive": {
+    "env_step": 50000,
+    "note": "Pre-registered secondary endpoint (hypothesis #2, faster early learning); single eval point per seed, n=3, descriptive only, no inferential test. The pre-registered RewardScaled arm shows no advantage over Baseline here.",
+    "arms": {
+      "baseline": {
+        "per_seed": [
+          357.07,
+          334.48,
+          303.43
+        ],
+        "mean": 331.66,
+        "sd_ddof1": 26.93
+      },
+      "rewardscale": {
+        "per_seed": [
+          307.46,
+          368.46,
+          385.63
+        ],
+        "mean": 353.85,
+        "sd_ddof1": 41.08
+      },
+      "fixedalpha": {
+        "per_seed": [
+          639.21,
+          332.78,
+          1028.39
+        ],
+        "mean": 666.79,
+        "sd_ddof1": 348.62
+      }
+    }
   }
 }

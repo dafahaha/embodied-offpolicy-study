@@ -99,6 +99,15 @@ exploratory post-hoc analyses (added after the 60k pass, uncorrected for
 multiple comparisons); the **pre-registered primary contrast is Baseline vs
 RewardScaled**.
 
+**Pre-registered secondary endpoint (early learning at 50k, descriptive only).**
+Hypothesis #2 asked for higher eval return at step 50k. Reading the single 50k
+eval point per seed from the committed CSVs (recomputed by
+`docs/assets/recompute_stats.py`): Baseline ≈ 332 (357.1, 334.5, 303.4),
+RewardScaled ≈ 354 (307.5, 368.5, 385.6), FixedAlpha ≈ 667 (639.2, 332.8,
+1028.4); n=3, descriptive only, no inferential test. The pre-registered
+RewardScaled arm shows no early-learning advantage over Baseline; FixedAlpha's
+higher mean rests on one seed and belongs to the post-hoc arm.
+
 **Interpretation (honest): at 120k steps there is no detectable effect.** All three
 arms land on statistically indistinguishable means with large seed-to-seed variance.
 The earlier 60k run looked like reward-scaling won by ~3x; restoring the
@@ -143,3 +152,8 @@ loose improvement floor (Δ ≥ 150), rather than pinning an exact value.
 - We bootstrap on time-limit truncation (correct), but do not normalise rewards.
 - MuJoCo env warned that Hopper-v4 is superseded by v5; we stayed on v4 to match
   classic SAC benchmarks.
+
+## License
+
+Released under the MIT License; see [LICENSE](LICENSE). Copyright (c) 2026
+dafahaha.

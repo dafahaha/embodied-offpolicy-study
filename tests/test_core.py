@@ -48,6 +48,47 @@ def test_actor_output_in_bounds_and_logprob():
     assert a_det.shape == (8, 1)
 
 
+# ---------------------------------------------------------------------------
+# Non-unit action bounds must be affinely rescaled into [low, high]. The
+# bounds test above uses the unit box [-1, 1] (scale=1, bias=0), where
+# deleting `action = act_scale*action + act_bias` still leaves outputs in
+# range and the test survives. Here we use Pendulum-like [-2, 2] and an
+# asymmetric [0, 3]: the deterministic action must equal scale*tanh(mu)+bias,
+# and raw tanh [-1, 1] would escape [0, 3], so deleting the rescale turns this
+# test RED.
+# ---------------------------------------------------------------------------
+def test_actor_nonunit_bounds_rescale_to_env_range():
+    torch.manual_seed(0)
+    # Pendulum-v1-style symmetric non-unit bounds [-2, 2]: scale=2, bias=0.
+    actor = SquashedGaussianActor(3, 1, torch.tensor([-2.0]), torch.tensor([2.0]), (16, 16))
+    assert actor.act_scale.tolist() == [2.0]
+    assert actor.act_bias.tolist() == [0.0]
+    obs = torch.randn(8, 3)
+    a, _ = actor(obs)
+    assert a.shape == (8, 1)
+    assert (a >= -2.0 - 1e-5).all() and (a <= 2.0 + 1e-5).all()
+    # deterministic action must be the affine rescale of tanh(mu), not raw tanh
+    with torch.no_grad():
+        mu = actor.mu_layer(actor.net(obs))
+    a_det, _ = actor(obs, deterministic=True, with_logprob=False)
+    assert torch.allclose(a_det, actor.act_scale * torch.tanh(mu) + actor.act_bias, atol=1e-5)
+
+    # Asymmetric bounds [0, 3]: scale=1.5, bias=1.5. Raw tanh [-1, 1] goes
+    # negative and escapes the lower bound, so the bounds assertion alone kills
+    # a deleted rescale here.
+    torch.manual_seed(1)
+    actor2 = SquashedGaussianActor(3, 1, torch.tensor([0.0]), torch.tensor([3.0]), (16, 16))
+    assert actor2.act_scale.tolist() == [1.5]
+    assert actor2.act_bias.tolist() == [1.5]
+    obs2 = torch.randn(16, 3)
+    a2, _ = actor2(obs2)
+    assert (a2 >= 0.0 - 1e-5).all() and (a2 <= 3.0 + 1e-5).all()
+    with torch.no_grad():
+        mu2 = actor2.mu_layer(actor2.net(obs2))
+    a2_det, _ = actor2(obs2, deterministic=True, with_logprob=False)
+    assert torch.allclose(a2_det, actor2.act_scale * torch.tanh(mu2) + actor2.act_bias, atol=1e-5)
+
+
 def test_critic_twin_shapes():
     critic = TwinCritic(3, 1, (16, 16))
     q1, q2 = critic(torch.randn(5, 3), torch.randn(5, 1))

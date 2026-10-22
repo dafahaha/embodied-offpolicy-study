@@ -93,6 +93,7 @@
   <tbody>
     <tr><td>RewardScaled ≥ Baseline on asymptotic return</td><td><span class="pill null">Pre-registered</span></td><td><code>PRE_REGISTRATION.md</code>; tested Baseline vs RewardScaled, p = 0.953</td></tr>
     <tr><td>Protocol: 120k steps, 3 seeds, 5 eval episodes/5k steps, last-4 window</td><td><span class="pill null">Pre-registered</span></td><td><code>PRE_REGISTRATION.md</code>, <code>configs/*.yaml</code></td></tr>
+    <tr><td>Hypothesis #2: higher eval at 50k (faster early learning)</td><td><span class="pill null">Pre-registered secondary, descriptive only</span></td><td>Single 50k eval point per seed; Baseline ≈ 332, RewardScaled ≈ 354, FixedAlpha ≈ 667; no inferential test; <code>results.json</code> <code>early_learning_50k_descriptive</code></td></tr>
     <tr><td>FixedAlpha arm (α = 0.2 frozen, scale 0.1)</td><td><span class="pill explore">Post-hoc control</span></td><td>Added after 60k pass; <code>configs/sac_hopper_fixedalpha.yaml</code></td></tr>
     <tr><td>Baseline vs FixedAlpha, FixedAlpha vs RewardScaled Welch tests</td><td><span class="pill explore">Post-hoc, uncorrected</span></td><td><code>docs/assets/results.json</code></td></tr>
     <tr><td>One-way ANOVA F = 0.22, p = 0.811</td><td><span class="pill explore">Post-hoc, descriptive</span></td><td><code>scipy.f_oneway</code> over the three tail-mean vectors</td></tr>

@@ -143,6 +143,16 @@
 Cohen's d = −0.051, Hedges' g = −0.041 (pooled SD 661.4) — a trivially small point estimate that
 is itself unreliable at n = 3.</p>
 
+<h3>Pre-registered secondary endpoint: early learning at 50k (descriptive only)</h3>
+<p>
+Hypothesis #2 expected higher eval return at step 50k (faster early learning). Reading the single
+50k eval point per seed from the committed CSVs (recomputed by <code>docs/assets/recompute_stats.py</code>):
+Baseline ≈ 332 (357.1, 334.5, 303.4), RewardScaled ≈ 354 (307.5, 368.5, 385.6), FixedAlpha ≈ 667
+(639.2, 332.8, 1028.4); n = 3, descriptive only, no inferential test. The pre-registered RewardScaled
+arm shows no early-learning advantage over Baseline; FixedAlpha's higher mean rests on one seed and
+belongs to the post-hoc arm.
+</p>
+
 <figure>
   <img src="assets/learning_curve.png" alt="SAC learning curves on Hopper-v4; shade is +/- 1 SD across seeds">
   <figcaption>Figure 1. Deterministic eval return over 120k steps; mean line across seeds, shaded ±1 SD.

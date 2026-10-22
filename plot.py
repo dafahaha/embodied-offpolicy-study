@@ -32,6 +32,14 @@ LOG_ROOT = os.path.join(os.path.dirname(__file__), "logs")
 FIG_DIR = os.path.join(os.path.dirname(__file__), "figures")
 # "last 20%" asymptotic window = last 4 eval points (105k-120k here).
 TAIL_EVAL_POINTS = 4
+# Fixed arm order for curves, bars, legend and printed tables; matches the
+# README/study-page table (Baseline, RewardScaled, FixedAlpha) instead of
+# alphabetical, which would swap RewardScaled and FixedAlpha.
+ARM_ORDER = [
+    "Baseline (reward_scale=1.0)",
+    "RewardScaled (reward_scale=0.1)",
+    "FixedAlpha (auto_tune=off)",
+]
 
 
 def arm_of(run_dir: str) -> str:
@@ -147,7 +155,11 @@ def main():
     plt.figure(figsize=(7, 4.5))
     summary = {}
     per_seed = {}
-    for arm, rs in sorted(runs.items()):
+    # Fixed arm order (Baseline, RewardScaled, FixedAlpha); any unknown arm is
+    # appended after the known ones rather than silently dropped.
+    ordered_arms = [a for a in ARM_ORDER if a in runs] + [a for a in runs if a not in ARM_ORDER]
+    for arm in ordered_arms:
+        rs = runs[arm]
         cols = []
         for seed, ev in sorted(rs):
             s = ev.sort_values("env_step")
