@@ -64,7 +64,7 @@ def _guard_metrics(metrics: dict, step: int) -> None:
 
     Split out of the training loop so it can be unit-tested directly.
     """
-    for k in ("critic_loss", "actor_loss", "q1_mean", "logp_mean"):
+    for k in ("critic_loss", "actor_loss", "q1_mean", "q2_mean", "logp_mean"):
         v = float(metrics.get(k, float("nan")))
         if not np.isfinite(v):
             print(
@@ -72,6 +72,7 @@ def _guard_metrics(metrics: dict, step: int) -> None:
                 f"(critic_loss={metrics.get('critic_loss')}, "
                 f"actor_loss={metrics.get('actor_loss')}, "
                 f"q1_mean={metrics.get('q1_mean')}, "
+                f"q2_mean={metrics.get('q2_mean')}, "
                 f"logp_mean={metrics.get('logp_mean')}).",
                 file=sys.stderr,
             )
@@ -200,7 +201,11 @@ def main():
                         }
                     )
                     csv_file.flush()
-                    obs, _ = env.reset()
+                    # Deterministic per-episode reseed: each episode starts from a
+                    # seed derived from the run seed and episode index, so env
+                    # internal randomness (initial states, etc.) is fixed instead
+                    # of relying on the env's inherited RNG state.
+                    obs, _ = env.reset(seed=args.seed + ep)
                     ep_ret, ep_len = 0.0, 0
 
                 if step >= next_eval_at:

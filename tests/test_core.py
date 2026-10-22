@@ -33,6 +33,16 @@ def test_replay_buffer_shapes_and_circular():
     assert obs.dtype == torch.float32
 
 
+def test_replay_buffer_sample_empty_raises_clear_error():
+    # P3-5: sampling an empty buffer must raise a clear ValueError instead of
+    # the raw np.random.randint(0, 0) "high <= 0" traceback. The mutation
+    # "delete the size==0 guard" must turn this test RED.
+    buf = ReplayBuffer(obs_dim=3, act_dim=1, capacity=10, device="cpu")
+    assert len(buf) == 0
+    with pytest.raises(ValueError, match="empty buffer"):
+        buf.sample(4)
+
+
 def test_actor_output_in_bounds_and_logprob():
     low = np.array([-1.0])
     high = np.array([1.0])
@@ -306,14 +316,43 @@ def test_subprocess_success_returns_normally():
 # a finite-but-huge q1_mean must warn (not abort).
 # ---------------------------------------------------------------------------
 def test_guard_aborts_on_nonfinite_logp():
-    bad = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 1.0, "logp_mean": float("nan")}
+    bad = {
+        "critic_loss": 1.0,
+        "actor_loss": 1.0,
+        "q1_mean": 1.0,
+        "q2_mean": 1.0,
+        "logp_mean": float("nan"),
+    }
+    with pytest.raises(SystemExit) as ei:
+        train_mod._guard_metrics(bad, step=1001)
+    assert ei.value.code == 3
+
+
+def test_guard_aborts_on_nonfinite_q2():
+    # P3-1: q2_mean alone must also abort (exit 3), not only q1_mean/logp.
+    # A NaN/Inf on the second twin critic was previously missed because the
+    # guard tuple only listed q1_mean; the mutation "drop q2_mean from the
+    # guard tuple" must turn this test RED.
+    bad = {
+        "critic_loss": 1.0,
+        "actor_loss": 1.0,
+        "q1_mean": 1.0,
+        "q2_mean": float("nan"),
+        "logp_mean": -1.0,
+    }
     with pytest.raises(SystemExit) as ei:
         train_mod._guard_metrics(bad, step=1001)
     assert ei.value.code == 3
 
 
 def test_guard_warns_on_large_q1_but_does_not_abort(capsys):
-    ok = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 2e4, "logp_mean": -1.0}
+    ok = {
+        "critic_loss": 1.0,
+        "actor_loss": 1.0,
+        "q1_mean": 2e4,
+        "q2_mean": 1.0,
+        "logp_mean": -1.0,
+    }
     train_mod._guard_metrics(ok, step=1001)  # no SystemExit
     err = capsys.readouterr().err
     assert "WARNING" in err and "q1_mean" in err
@@ -322,7 +361,13 @@ def test_guard_warns_on_large_q1_but_does_not_abort(capsys):
 def test_guard_warns_on_huge_finite_logp_but_does_not_abort(capsys):
     # The recorded incident had log_prob explode to 1e15 — a *finite* float,
     # so np.isfinite() lets it through. It must still trip the soft guard.
-    bad = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 1.0, "logp_mean": 1e15}
+    bad = {
+        "critic_loss": 1.0,
+        "actor_loss": 1.0,
+        "q1_mean": 1.0,
+        "q2_mean": 1.0,
+        "logp_mean": 1e15,
+    }
     train_mod._guard_metrics(bad, step=1001)  # no SystemExit
     err = capsys.readouterr().err
     assert "WARNING" in err and "logp_mean" in err
@@ -330,7 +375,13 @@ def test_guard_warns_on_huge_finite_logp_but_does_not_abort(capsys):
 
 def test_guard_silent_on_healthy_logp(capsys):
     # Healthy logp_mean ~ -2..-6 and q1 in the hundreds -> no warning at all.
-    ok = {"critic_loss": 1.0, "actor_loss": 1.0, "q1_mean": 50.0, "logp_mean": -3.5}
+    ok = {
+        "critic_loss": 1.0,
+        "actor_loss": 1.0,
+        "q1_mean": 50.0,
+        "q2_mean": 48.0,
+        "logp_mean": -3.5,
+    }
     train_mod._guard_metrics(ok, step=1001)
     err = capsys.readouterr().err
     assert "WARNING" not in err

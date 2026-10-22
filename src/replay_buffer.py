@@ -37,6 +37,13 @@ class ReplayBuffer:
         self.size = min(self.size + 1, self.capacity)
 
     def sample(self, batch_size: int):
+        if self.size == 0:
+            raise ValueError(
+                "ReplayBuffer.sample() called on an empty buffer (size=0): "
+                "add transitions before sampling (the warmup/start_steps phase "
+                "must elapse first). The raw np.random.randint(0, 0) would "
+                "otherwise fail with the cryptic 'high <= 0' ValueError."
+            )
         idx = np.random.randint(0, self.size, size=batch_size)
 
         def to_t(x):

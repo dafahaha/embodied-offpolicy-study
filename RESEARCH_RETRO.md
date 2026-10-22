@@ -79,3 +79,17 @@ what I can claim — not "reward scaling has no effect".
 Many more seeds (10+) before claiming anything; checkpointing so a killed run
 resumes; normalised rewards as another arm; and treat any "looks better" early
 curve as provisional until a control arm and full budget are in.
+
+## Reproduction notes (hygiene)
+
+- **PNGs are not byte-reproducible across renders.** Re-running `python plot.py`
+  changes the PNG bytes (matplotlib metadata, antialiasing, layout rounding) even
+  when every plotted number is identical; only the statistics are reproduced,
+  not the pixels. The CI freshness gate (`check_study_artifacts.py`) therefore
+  asserts the recomputed key statistics and arm order rather than hashing the
+  images, and keeps the `figures/` and `docs/assets/` copies byte-identical to
+  each other.
+- **Per-episode env seeding.** Each episode's `env.reset(seed=args.seed+ep)`
+  fixes env-internal randomness per episode; note that multi-threaded torch CPU
+  reductions are still not bit-level deterministic, so runs reproduce the
+  qualitative result, not identical floats.

@@ -24,12 +24,20 @@ jobs:
       - name: Lint gates (black / isort / flake8)
         run: |
           pip install black isort flake8
-          black --check --line-length=100 src train.py plot.py ci_check.py conftest.py tests
-          isort --check-only --line-length=100 --profile black src train.py plot.py ci_check.py conftest.py tests
-          flake8 --max-line-length=100 --extend-ignore=E203,W503 src train.py plot.py ci_check.py conftest.py tests
+          black --check --line-length=100 src train.py plot.py ci_check.py check_study_artifacts.py conftest.py tests docs/assets/recompute_stats.py
+          isort --check-only --line-length=100 --profile black src train.py plot.py ci_check.py check_study_artifacts.py conftest.py tests docs/assets/recompute_stats.py
+          flake8 --max-line-length=100 --extend-ignore=E203,W503 src train.py plot.py ci_check.py check_study_artifacts.py conftest.py tests docs/assets/recompute_stats.py
       - name: Lint (byte-compile)
-        run: python -m compileall src train.py plot.py ci_check.py
+        run: python -m compileall src train.py plot.py ci_check.py check_study_artifacts.py docs/assets/recompute_stats.py
       - name: Unit tests
         run: pytest tests/ -q
+      - name: Independent stats recompute (results.json must match committed)
+        run: |
+          python docs/assets/recompute_stats.py
+          git diff --exit-code -- docs/assets/results.json
+      - name: Artifact freshness gate (figures + committed stats)
+        run: |
+          python plot.py
+          python check_study_artifacts.py
       - name: Learn gate (Pendulum, fast)
         run: python ci_check.py

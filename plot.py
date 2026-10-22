@@ -19,6 +19,7 @@ from __future__ import annotations
 import glob
 import os
 import re
+import shutil
 
 import matplotlib
 import numpy as np
@@ -30,6 +31,21 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 LOG_ROOT = os.path.join(os.path.dirname(__file__), "logs")
 FIG_DIR = os.path.join(os.path.dirname(__file__), "figures")
+DOC_ASSETS_DIR = os.path.join(os.path.dirname(__file__), "docs", "assets")
+
+
+def _sync_to_docs_assets(src_path: str) -> None:
+    """Mirror a freshly rendered PNG into docs/assets/ when that folder exists.
+
+    The static notes site (docs/) keeps its own copy of the two figures; copying
+    on every regeneration keeps figures/ and docs/assets/ from drifting apart
+    (P2-1: the committed PNGs were once rendered from pre-order-fix code and
+    went stale relative to the current plot.py).
+    """
+    if os.path.isdir(DOC_ASSETS_DIR):
+        shutil.copyfile(src_path, os.path.join(DOC_ASSETS_DIR, os.path.basename(src_path)))
+
+
 # "last 20%" asymptotic window = last 4 eval points (105k-120k here).
 TAIL_EVAL_POINTS = 4
 # Fixed arm order for curves, bars, legend and printed tables; matches the
@@ -189,6 +205,7 @@ def main():
     plt.tight_layout()
     out1 = os.path.join(FIG_DIR, "learning_curve.png")
     plt.savefig(out1, dpi=130)
+    _sync_to_docs_assets(out1)
     print("wrote", out1)
 
     # ---- Asymptotic: raw seed points + mean + t-based 95% CI (df=n-1) ----
@@ -227,6 +244,7 @@ def main():
     plt.tight_layout()
     out2 = os.path.join(FIG_DIR, "asymptotic.png")
     plt.savefig(out2, dpi=130)
+    _sync_to_docs_assets(out2)
     print("wrote", out2)
 
     print(f"\n=== Asymptotic (last {TAIL_EVAL_POINTS} eval points, i.e. 105k-120k) ===")

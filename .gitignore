@@ -12,3 +12,6 @@ logs/ci_pendulum/
 .DS_Store
 # analysis scratch / intermediate recalc scripts, not part of the deliverable
 artifacts/
+# internal round-1 audit notes / pytest evidence; not distributed publicly
+AUDIT_ROUND1_1022.md
+AUDIT_ROUND1_1022_pytest.txt

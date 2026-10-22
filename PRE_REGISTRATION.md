@@ -24,7 +24,9 @@ max-entropy objective couples Q-magnitude to the temperature term
 (`alpha * log pi`), smaller Q targets should reduce critic over-estimation bias
 and stabilise learning, yielding:
 
-1. Higher asymptotic (final-10k-step) deterministic eval return on Hopper-v4.
+1. Higher asymptotic deterministic eval return on Hopper-v4, measured over
+   the last 4 eval points (105k–120k steps, the last 20% of training) — the
+   same window defined as the Primary outcome below.
 2. Faster early learning (higher eval return at, say, step 50k).
 
 Direction: `RewardScaled >= Baseline`. We explicitly allow the result to come
