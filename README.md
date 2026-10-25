@@ -35,25 +35,67 @@ PRE_REGISTRATION.md       hypothesis registered before results
 RESEARCH_RETRO.md         short human-readable write-up
 ```
 
+## Prerequisites (read first)
+
+- **Python 3.13 (64-bit).** The committed logs were produced on CPython 3.13.x;
+  `requirements.txt` is pinned to that interpreter.
+- **CPU only.** Every run in this repo is CPU-only. The pinned torch is
+  `2.14.1+cpu` (CUDA disabled). Do **not** `pip install torch` from plain PyPI
+  on top of this — that pulls a multi-GB CUDA wheel and does not match the
+  committed environment.
+- **Windows: clone to a pure-ASCII path.** MuJoCo's native layer cannot resolve
+  `hopper.xml` when the repo sits under a path containing non-ASCII characters
+  (e.g. `D:\github项目`). Clone/copy this repo to an ASCII-only path such as
+  `D:\repos\embodied-offpolicy-study` and run from there. This is a MuJoCo
+  path-encoding limitation on Windows, not a bug in this repo's code — see
+  [Troubleshooting](#troubleshooting) for the full explanation and the
+  one-line verification command.
+
 ## Quick start
 
-```bash
+```powershell
+# 0. (Windows) make sure you are inside a pure-ASCII checkout, e.g. D:\repos\embodied-offpolicy-study
+
+# 1. create and activate a fresh virtualenv
+python -m venv .venv
+.\.venv\Scripts\activate            # Windows PowerShell
+# source .venv/bin/activate         # macOS / Linux
+
+# 2. install pinned deps. torch==2.14.1+cpu is fetched from the PyTorch CPU
+#    index (https://download.pytorch.org/whl/cpu), which is declared in-file at
+#    the top of requirements.txt; everything else comes from PyPI. No extra
+#    flags are needed.
 pip install -r requirements.txt
 
-# unit tests
+# 3. sanity-check the install: torch must report +cpu and no CUDA; Hopper-v4
+#    must construct without raising (this is also the non-ASCII-path check).
+python -c "import torch, gymnasium as gym; print(torch.__version__); gym.make('Hopper-v4')"
+
+# 4. unit tests
 pytest tests/ -q
 
-# validation: prove the agent learns on Pendulum
+# 5. validation: prove the agent learns on Pendulum
 python train.py --config configs/sac_pendulum.yaml --seed 0 --out logs/pendulum_val_s0
 
-# one arm of the study (repeat for each seed / config)
+# 6. one arm of the study (repeat for each seed / config)
 python train.py --config configs/sac_hopper_baseline.yaml    --seed 0 --out logs/hopper_baseline_s0
 python train.py --config configs/sac_hopper_rewardscale.yaml --seed 0 --out logs/hopper_rewardscale_s0
 python train.py --config configs/sac_hopper_fixedalpha.yaml  --seed 0 --out logs/hopper_fixedalpha_s0
 
-# plot from the raw CSVs
+# 7. plot from the raw CSVs
 python plot.py
 ```
+
+> **Where the torch wheel comes from.** `torch==2.14.1+cpu` is a local version
+> that is *not* published on the default PyPI index; it only exists on the
+> PyTorch CPU index (`https://download.pytorch.org/whl/cpu`). The `requirements.txt`
+> declares `--extra-index-url https://download.pytorch.org/whl/cpu` at its top,
+> so the single `pip install -r requirements.txt` command above automatically
+> fetches the +cpu wheel from that index and every other package from PyPI.
+> (Without that in-file declaration pip fails with "No matching distribution
+> found" for torch, because the +cpu wheel is absent from plain PyPI; with a
+> bare `torch==2.14.1` pin, pip would instead resolve the multi-GB CUDA wheel
+> from PyPI.)
 
 ## Troubleshooting
 

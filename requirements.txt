@@ -1,4 +1,12 @@
-torch==2.14.1
+# CPU-only reproduction path. The committed Hopper CSVs were produced on
+# torch 2.14.1+cpu (CUDA disabled; torch.cuda.is_available()==False). The +cpu
+# local version is NOT published on the default PyPI index - it only exists on
+# the PyTorch CPU index - so that index is declared in-file here, which lets a
+# plain `pip install -r requirements.txt` on a clean machine resolve
+# torch==2.14.1+cpu without any extra flags. Without this line pip would pull
+# the multi-GB CUDA wheel from PyPI instead.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
 # Pinned to the interpreter that produced the committed logs (reproducibility):
 # numpy/pandas/matplotlib/scipy exact. gymnasium is the [mujoco] extra, not the
 # bare wheel: gymnasium imports imageio (and packaging) at env-import time for
