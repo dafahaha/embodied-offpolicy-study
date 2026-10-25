@@ -55,6 +55,19 @@ python train.py --config configs/sac_hopper_fixedalpha.yaml  --seed 0 --out logs
 python plot.py
 ```
 
+## Troubleshooting
+
+- **Windows: `gym.make('Hopper-v4')` crashes / MuJoCo cannot open `hopper.xml`.**
+  If this repository sits under a path containing non-ASCII characters (observed with
+  a folder named in Chinese, e.g. `D:\github项目`), MuJoCo's native layer fails to
+  resolve `hopper.xml` and `gym.make('Hopper-v4')` raises a model-load error — even
+  though `pip install gymnasium[mujoco]` succeeded. This is a MuJoCo path-encoding
+  issue on Windows, not a bug in this study's code. **Workaround:** clone or copy the
+  repository to a pure-ASCII path (e.g. `D:\repos\embodied-offpolicy-study`) and run
+  from there; the same code runs fine once the path is ASCII-only. Quick check:
+  `python -c "import gymnasium as gym; gym.make('Hopper-v4')"` should construct
+  without raising.
+
 ## Actual resolved environment (prereg vs pinned)
 
 `PRE_REGISTRATION.md` names gymnasium 1.3.0 / mujoco 3.14.0 as the planned stack.
