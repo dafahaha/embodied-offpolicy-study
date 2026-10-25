@@ -1,8 +1,12 @@
 torch==2.14.1
 # Pinned to the interpreter that produced the committed logs (reproducibility):
-# numpy/pandas/matplotlib/scipy/gymnasium exact, mujoco explicit (was previously
-# pulled transitively and not pinned, despite preregistration naming it).
-gymnasium==1.4.0
+# numpy/pandas/matplotlib/scipy exact. gymnasium is the [mujoco] extra, not the
+# bare wheel: gymnasium imports imageio (and packaging) at env-import time for
+# MuJoCo envs even in headless mode, so a bare `gymnasium` pin leaves
+# gym.make("Hopper-v4") crashing with ModuleNotFoundError: imageio. mujoco itself
+# is pinned below (was previously pulled transitively and not pinned, despite
+# preregistration naming it).
+gymnasium[mujoco]==1.4.0
 mujoco==3.15.0
 numpy==2.5.2
 pandas==3.0.5
